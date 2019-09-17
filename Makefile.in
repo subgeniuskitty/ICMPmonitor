@@ -1,0 +1,42 @@
+# $Id: Makefile.in,v 1.2 2000/07/25 01:10:25 lord Exp $
+
+CC=@CC@
+CFLAGS=@CFLAGS@ @DEFS@
+LIBS=@LIBS@
+top_srcdir=@top_srcdir@
+srcdir=@srcdir@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+sbindir=@sbindir@
+mandir=@mandir@
+INSTALL = @INSTALL@
+
+OBJS=icmpmonitor.o cfg.o
+
+VERSION=1.0
+
+all: icmpmonitor
+
+icmpmonitor: $(OBJS) Makefile
+	$(CC) $(CFLAGS) $(OBJS) -o icmpmonitor $(LIBS)
+
+icmpmonitor.o: icmpmonitor.c cfg.h Makefile
+cfg.o: cfg.c cfg.h Makefile
+
+clean:
+	rm -f *.o icmpmonitor core
+
+distclean: clean
+	rm -f config.log config.cache config.status Makefile
+
+tar:	distclean
+	(cd ..; \
+	rm -f icmpmonitor*.tar icmpmonitor*.tar.gz; \
+	tar --exclude CVS -cvf icmpmonitor-$(VERSION).tar icmpmonitor; \
+	gzip -9 icmpmonitor-$(VERSION).tar)
+
+install: icmpmonitor icmpmonitor.man
+	$(top_srcdir)/mkinstalldirs $(sbindir)
+	$(INSTALL) icmpmonitor $(sbindir)
+	$(top_srcdir)/mkinstalldirs $(mandir)/man1
+	$(INSTALL) icmpmonitor.man $(mandir)/man1/icmpmonitor.1

@@ -1,0 +1,105 @@
+.TH icmpmonitor 1 "Version 1.2"
+.ds ]W September 1999
+.SH NAME
+icmpmonitor \- multiple host monitoring tool
+.SH SYNOPSIS
+.ta 6n
+\fBicmpmonitor\fP 
+[-f \fIcfg file\fP]
+[-d]
+[-v]
+[-r]
+ 
+.br
+.SH DESCRIPTION
+The 
+.I icmpmonitor 
+Using the InterNet Control Message Protocol (ICMP) "ECHO" facility, 
+monitors several hosts, and notify admin if some of them are down.
+
+.SH OPTIONS
+.PP
+.I icmpmonitor\fP accepts following options:
+.TP 8
+.B \-d 
+if specified, the program will detach itself from control terminal and work in 'daemon' mode. All error messages will go to syslog.
+.TP 8
+.B \-f \fP<\fIconfiguration file\fP>
+Name of configuration file.
+.TP 8
+.B \-v
+if specified, the program will produce more log messages describing its activity.
+.TP 8
+.B \-r
+Execute DOWN command repeatedly until host will be up again. If it is not specified, the command is excuted only once.
+
+.SH CONFIGURATION FILE FORMAT
+.PP
+You need to create the configuration file. You can find a sample one in the distribution named 'sample.cfg'. The file consists of one or more lines. Lines starting with "#" are
+comments and are ignored. Each line must contain following fields, separeated by spaces or
+tabs:
+
+.TP 8
+.B Hostname          \fP
+Name of the host which will be monitored.
+.TP 8
+.B Ping Interval            \fP
+Interval (in seconds) on which ICMP packets will be sent to the host to check it's status.
+.TP 8
+.B Max. Delay             \fP
+Maximum delay (in seconds) after which host considered to be "down" if no response was received.
+.TP 8
+.B "Up" Command        \fP
+Command which will be executed when host became accessible. 
+This command is executed
+using "sh -c" and may contain shell syntax. If command contain spaces or tabs
+it should be quoted. 
+If the command is executing some lenghy operation it is recommended to start
+it as detached process (for example using '&'), because icmpmonitor will not resume monitoring of this
+and other hosts until command is finished.
+.TP 8
+.B "Down" Command       \fP
+Command which will be executed when host became not accessible.
+This command will be executed
+using "sh -c" and may contain shell syntax. If command contain spaces or tabs
+it should be quoted.
+If the command is executing some lenghy operation it is recommended to start
+it as detached process (for example using '&'), because icmpmonitor will not resume monitoring of this
+and other hosts until command is finished.
+.TP 8
+.B Startup Condition (optional) \fp
+Condition of the host that should be assumed on startup.
+Possible values are "auto", "down", "none" and "up".
+The parameter is optional with "up" being the default value.
+The main purpose is controlling which up/down commands will be launched on startup.
+"auto" detects the state of the host silently on startup and doesn't launch any command first.
+"down" assumes the host is down and executes the up command on the first ping recieved. Similar to "up".
+"none" starts either up or down command on startup.
+
+.SH BUGS
+It was reported that some systems (e.g. Solaris 2.5) do not have function 
+vsnprintf. In such case icmpmonitor will use vsprintf instead, but this could 
+cause buffer overflow problem. 
+
+If you find any other bugs, please follow link to bug tracking system
+from ICMPmonitor project home page to file them.
+.TP 8
+
+.PP
+.SH SEE ALSO
+.PP
+\fBhttp://www.crocodile.org/software.html\fP
+.SH AUTHOR
+.PP
+Vadim Zaliva <lord@crocodile.org>
+.SH CONTRIBUTORS
+.PP
+I would like to thank following people for help in developement of this software:
+Alexandr S. Dubovicov <shurik@te.net.ua>,
+Andrey Arhipov <andy@paco.net>,
+Bernhard Lutzmann <belu@gmx.at>,
+Ingo Saitz <Salz@users.sourceforge.net> 
+
+
+
+

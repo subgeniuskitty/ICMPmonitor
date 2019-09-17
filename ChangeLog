@@ -1,0 +1,130 @@
+2004-05-27  Vadim Zaliva  <lord@zembla.avistar.com>
+
+	* icmpmonitor.c: Per suggestion of Mats Peterson in bug
+	#933033 'ident' type changed to unsigned short.
+	(main): Applied patch from A.Mavrin which solves problems
+	with big PIDs causing ICMPmonitor not to recognize its own
+	pings if PID>0xFFFF.
+	* NEWS: Version 1.2
+
+2000-07-24  Vadim Zaliva  <lord@crocodile.org>
+
+	* icmpmonitor.man: 
+	* icmpmonitor.c: Patch #100504 incorporated.
+
+	* Makefile.in (install): 
+	* icmpmonitor.spec (Source): fix for bug #107029 (install to sbin)
+
+1999-11-21  Vadim Zaliva  <lord@crocodile.org>
+
+	* icmpmonitor.init: init script for redhat linux-6.1 added.
+
+	* icmpmonitor.man: Project moved to sourceforge.net. Now we have publicly accessible CVS and bug tracking system!
+
+	* icmpmonitor.c (init_hosts): ping delay is now calculated as GCD. Bug #100166
+
+1999-09-24  Vadim Zaliva  <lord@crocodile.org>
+
+	* icmpmonitor.c (start_daemon): few warnings to make Compaq compiler happy.
+
+	* cfg.c (cfg_new_entry): bug found by compaque compiler corrected.
+
+1999-09-17  Vadim Zaliva  <lord@crocodile.org>
+
+	* NEWS: Version 1.1
+
+1999-09-16  Vadim Zaliva  <lord@crocodile.org>
+
+	* icmpmonitor.c: new OLD_ICMPHEADER code from Bernhard Lutzmann <belu@gmx.at>
+	Event better Slacware 4 problem handling from Bernhard Lutzmann <belu@gmx.at>
+	Tested to compile on Solaris 7.
+
+1999-09-15  Vadim Zaliva  <lord@crocodile.org>
+
+	* cfg.c (readcfg): problem with very long tokens in cfg corrected.
+
+	* icmpmonitor.c: headers order corrected for FreeBSD-3.3RC compatibility.
+	(main): problem with -r option handling corrected.
+
+	* icmpmonitor.man (tabs): lots of typos corrected, thanks to Bernhard Lutzmann <belu@gmx.at>.
+
+1999-09-14  Vadim Zaliva  <lord@crocodile.org>
+
+	* icmpmonitor.c (main): new -r option added per Chris Montgomery <chris@trinsec.com> request.
+
+	* cfg.c: new implementation of cfg file handling.
+
+	* icmpmonitor.c: Added workaround for broken ip_icmp header on Slackware 4.0 from Bernhard Lutzmann <belu@gmx.at>
+
+1999-09-12  Vadim Zaliva  <lord@crocodile.org>
+
+	* icmpmonitor.c (read_hosts): applyed patch from Bernhard Lutzmann <belu@gmx.at> correcting error message when cfg format is incorrect.
+
+1999-08-17  Vadim Zaliva  <lord@crocodile.org>
+
+	* cfg.c (readcfg): small memory leak corrected
+
+1999-06-28  Vadim Zaliva  <lord@crocodile.org>
+
+	* cfg.c (cfgfind): bug fixed. find works fine now. (it is not used in current code anyway).
+
+1999-06-14  Vadim Zaliva  <lord@crocodile.org>
+
+	* icmpmonitor.spec: spec file created, man page finished, 'install' goal added to makefile. This would be version 1.0
+
+1999-06-12  Vadim Zaliva  <lord@crocodile.org>
+
+	* icmpmonitor.c (read_icmp_data): completely done with zombies
+
+1999-05-12  Vadim Zaliva  <lord@crocodile.org>
+
+	* icmpmonitor.c (main): avoiding zombie processes.
+
+	* cfg.h (struct Cfg): memory structures changed.
+
+1999-05-05  Vadim Zaliva  <lord@crocodile.org>
+
+	* icmpmonitor.c: verbose command line option added. More consistent use of LOG_DEBUG and LOG_INFO.
+
+	* configure.in: checks for openlog, closelog, syslog.
+
+	* icmpmonitor.c (main): reading command line options,
+	(start_daemon): daemon mode.
+
+	* cfg.c (freecfg): small potenial bug corrected. 
+
+1999-05-04  Vadim Zaliva  <lord@crocodile.org>
+
+	* cfg.c (freecfg): bug corrected, thanks to FreeBSD malloc diagnostics.
+
+1999-05-04  Vadim Zaliva  <lord@freefall.freebsd.org>
+
+	* Made it compile under FreeBSD. Still coredumps. 
+
+1999-05-04  Vadim Zaliva  <lord@crocodile.org>
+
+	* configure.in: GNU autoconf used.
+
+	* icmpmonitor.c (pinger): up/down command execution.
+
+1999-05-01  Vadim Zaliva  <lord@crocodile.org>
+
+	* icmpmonitor.c (read_hosts): reading cfg file implemented.
+
+	* cfg.c: rewritten 
+
+1999-04-27  Vadim Zaliva  <lord@crocodile.org>
+
+	* icmpmonitor.c: works as basic ping.
+	(read_icmp_data): calculate round trip time.
+
+1999-04-26  Vadim Zaliva  <lord@crocodile.org>
+
+	* icmpmonitor.c (read_icmp_data): base reading code.
+
+1999-04-23  Vadim Zaliva  <lord@crocodile.org>
+
+	* icmpmonitor.c: Started keeping chnagelog.
+	BSD license inserted.
+	(pinger): basic sending code implemented.
+
