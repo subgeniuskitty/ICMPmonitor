@@ -64,6 +64,7 @@ char rcsid[] = "$Id: icmpmonitor.c,v 1.8 2004/05/28 01:33:07 lord Exp $";
 #include <string.h>
 #ifdef HAVE_SYS_TIME_H
 # include <sys/time.h>
+# include <sys/wait.h>
 #endif
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -76,6 +77,8 @@ char rcsid[] = "$Id: icmpmonitor.c,v 1.8 2004/05/28 01:33:07 lord Exp $";
 #ifdef HAVE_UNISTD_H
 # include <unistd.h>
 #endif
+
+#include <sys/stat.h>
 
 #include <netinet/in.h>
 #include <arpa/inet.h>
