@@ -10,79 +10,28 @@
 #include <sys/param.h>
 #include <stdio.h>
 #include <stdlib.h>
-#ifdef HAVE_SYSLOG_H
-# include <syslog.h>
-#endif
+#include <syslog.h>
 #include <stdarg.h>
 #include <signal.h>
 #include <string.h>
-#ifdef HAVE_SYS_TIME_H
-# include <sys/time.h>
-# include <sys/wait.h>
-#endif
+#include <sys/time.h>
+#include <sys/wait.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#ifdef HAVE_FCNTL_H
-# include <fcntl.h>
-#endif
-#ifdef HAVE_SYS_FCNTL_H
-# include <sys/fcntl.h>
-#endif
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
-
+#include <fcntl.h>
+#include <sys/fcntl.h>
+#include <unistd.h>
 #include <sys/stat.h>
-
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <netinet/in_systm.h>
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
-
-/* Workaround for broken ICMP header on Slackware 4.x */
-#ifdef _LINUX_ICMP_H
-# warning "Broken Slackware 4.x 'netinet/ip_icmp.h' header detected. Using replacement 'struct icmp' definition."
-# define ICMP_MINLEN    8
-struct icmp
-{
-    u_int8_t  icmp_type;
-    u_int8_t  icmp_code;
-    u_int16_t icmp_cksum;
-    union
-    {
-        struct ih_idseq
-        { 
-            u_int16_t icd_id;
-            u_int16_t icd_seq;
-        } ih_idseq;
-    } icmp_hun;
-    
-# define icmp_id         icmp_hun.ih_idseq.icd_id
-# define icmp_seq        icmp_hun.ih_idseq.icd_seq
-    
-    union {
-        u_int8_t    id_data[1];
-    } icmp_dun;
-    
-# define icmp_data       icmp_dun.id_data
-    
-};
-#endif /* _LINUX_ICMP_H */
-
 #include <stddef.h>
 #include <errno.h>
 
 #include "cfg.h"
-
-/* defines */
-
-/* #define DEBUG */
-
-#ifndef nil
-# define nil NULL
-#endif
 
 /* return codes */
 #define RET_OK         0
@@ -142,7 +91,7 @@ static int gcd(int x, int y);
 
 /* globals */
 
-static monitor_host_t **hosts      = nil;
+static monitor_host_t **hosts      = NULL;
 static int             isDaemon    = 0; 
 static int             isVerbose   = 0;
 static int             keepBanging = 0;
@@ -153,7 +102,7 @@ int main(int ac, char **av)
 {
     extern char* optarg;
     extern int   optind;
-    char         *cfgfile=nil;
+    char         *cfgfile=NULL;
     int          param;
     
     logopen();
@@ -280,7 +229,7 @@ static void pinger(int ignore)
                         exit(0);
                     } else
                     {
-                        wait(nil);
+                        wait(NULL);
                     }
                 }
             }
@@ -354,7 +303,7 @@ static void get_response(void)
             p=p->next;
         }
 
-        retval = select(maxd+1, &rfds, nil, nil, nil);
+        retval = select(maxd+1, &rfds, NULL, NULL, NULL);
         if(retval<0)
         {
             /* we get her in case we are interrupted by signal.
@@ -444,7 +393,7 @@ static void read_icmp_data(monitor_host_t *p)
                 exit(0);
             } else
             {
-                wait(nil);
+                wait(NULL);
             }
         }
     } else
@@ -562,7 +511,7 @@ static void init_hosts(void)
     struct protoent   *proto;
     int ok=0;
 
-    if((proto=getprotobyname("icmp"))==nil)
+    if((proto=getprotobyname("icmp"))==NULL)
     {
         log(LOG_ERR,"Unknown protocol: icmp. Exiting.");
         done(RET_INIT_ERROR);
@@ -642,20 +591,14 @@ void start_daemon(void)
 
 static void logopen(void)
 {
-#if HAVE_OPENLOG
     if(isDaemon)
         openlog("icmpmonitor", LOG_PID| LOG_CONS|LOG_NOWAIT, LOG_USER);
-#else
-    log(LOG_WARNING,"Compiled without syslog. Syslog can't be used.");
-#endif
 }
 
 static void logclose(void)
 {
-#if HAVE_CLOSELOG
     if(isDaemon)
         closelog();
-#endif
 }
 
 /**
@@ -686,19 +629,8 @@ static void log(int type, char *format, ...)
     {
         char buffer[MAX_LOG_MSG_SIZE];
             
-#if HAVE_VSNPRINTF    
         (void)vsnprintf(buffer, MAX_LOG_MSG_SIZE, format, ap);
-#else
-# if HAVE_VSPRINTF
-#  warning "Using VSPRINTF. Buffer overflow could happen!"
-        (void)vsprintf(buffer, format, ap);
-# else
-#  error "Your standard libabry have neither vsnprintf nor vsprintf defined. One of them is reqired!"
-# endif
-#endif
-#if HAVE_SYSLOG            
         syslog(type,buffer);
-#endif
     } else
     {
         (void)  fprintf(stderr, "icmpmonitor[%d]:", (int)getpid());
