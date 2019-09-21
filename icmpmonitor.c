@@ -80,7 +80,6 @@ static void pinger(int);
 static int  in_cksum(u_short *addr, int len);
 static void read_icmp_data(monitor_host_t *p);
 static void tvsub(struct timeval *out, struct timeval *in);
-static void done(int code);
 static int gcd(int x, int y);
 
 /* globals */
@@ -123,8 +122,8 @@ int main(int ac, char **av)
   	    cfgfile=strdup(optarg);  
   	    break;  
  	default: 
- 	    fprintf(stderr,"Usage: icmpmonitor [-v] [-r] [-f cfgfile]\n");
-            done(RET_BAD_OPT);
+            fprintf(stderr,"Usage: icmpmonitor [-v] [-r] [-f cfgfile]\n");
+            exit(EXIT_FAILURE);
  	} 
     
     if (!cfgfile) {
@@ -142,8 +141,8 @@ int main(int ac, char **av)
     alarm(send_delay); 
 
     get_response();
-    
-    done(RET_OK);
+
+    exit(EXIT_SUCCESS);
 }
 
 
@@ -525,11 +524,6 @@ tvsub(register struct timeval *out, register struct timeval *in)
 		out->tv_usec += 1000000;
 	}
 	out->tv_sec -= in->tv_sec;
-}
-
-void done(int code)
-{
-    exit(code);
 }
 
 static int gcd(int x, int y)
