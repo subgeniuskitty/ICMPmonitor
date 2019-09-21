@@ -4,7 +4,7 @@
  * © 2019 Aaron Taylor <ataylor at subgeniuskitty dot com>
  * © 1999 Vadim Zaliva <lord@crocodile.org>
  * © 1989 The Regents of the University of California & Mike Muuss
- * See LICENSE.txt file for copyright and license details.
+ * See LICENSE file for copyright and license details.
  */
 
 #include <sys/param.h>
