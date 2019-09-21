@@ -32,13 +32,6 @@
 
 #include "cfg.h"
 
-/* return codes */
-#define RET_OK         0
-#define RET_NO_HOSTS   1
-#define RET_INIT_ERROR 2
-#define RET_BAD_CFG    3
-#define RET_BAD_OPT    4
-
 #define	MAXPACKET	(65536 - 60 - 8) /* max packet size     */
 #define	DEFDATALEN	(64 - 8)	 /* default data length */
 
