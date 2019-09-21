@@ -10,7 +10,6 @@
 #include <sys/param.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <syslog.h>
 #include <stdarg.h>
 #include <signal.h>
 #include <string.h>
@@ -74,8 +73,6 @@ typedef struct monitor_host
 } monitor_host_t;
 
 /* protos */
-static void logopen(void);
-static void logclose(void);
 static void log(int type, char *format, ...);
 static int  gethostaddr(const char *name);
 static void read_hosts(const char *cfg_file_name);
@@ -86,13 +83,11 @@ static int  in_cksum(u_short *addr, int len);
 static void read_icmp_data(monitor_host_t *p);
 static void tvsub(struct timeval *out, struct timeval *in);
 static void done(int code);
-static void start_daemon(void);
 static int gcd(int x, int y);
 
 /* globals */
 
 static monitor_host_t **hosts      = NULL;
-static int             isDaemon    = 0; 
 static int             isVerbose   = 0;
 static int             keepBanging = 0;
 static unsigned short  ident;
@@ -105,17 +100,13 @@ int main(int ac, char **av)
     char         *cfgfile=NULL;
     int          param;
     
-    logopen();
     log(LOG_INFO, VERSION " is starting.");
 
-    while((param = getopt(ac, av, "rvdf:")) != -1)
+    while((param = getopt(ac, av, "rvf:")) != -1)
   	switch(param)
         { 
  	case 'v':
             isVerbose = 1;
- 	    break; 
- 	case 'd':
-            isDaemon = 1;
  	    break; 
  	case 'r':
             keepBanging = 1;
@@ -124,7 +115,7 @@ int main(int ac, char **av)
   	    cfgfile=strdup(optarg);  
   	    break;  
  	default: 
- 	    fprintf(stderr,"Usage: icmpmonitor [-d] [-v] [-r] [-f cfgfile]\n");
+ 	    fprintf(stderr,"Usage: icmpmonitor [-v] [-r] [-f cfgfile]\n");
             done(RET_BAD_OPT);
  	} 
     
@@ -134,11 +125,7 @@ int main(int ac, char **av)
 	cfgfile="icmpmonitor.cfg";
     }
 
-    read_hosts(cfgfile); /* we do this before becoming daemon,
-                            to be able process relative path */
-
-    if(isDaemon)
-        start_daemon();
+    read_hosts(cfgfile);
     
     init_hosts();
     
@@ -569,36 +556,7 @@ tvsub(register struct timeval *out, register struct timeval *in)
 
 void done(int code)
 {
-    logclose();
     exit(code);
-}
-
-void start_daemon(void)
-{
-    if(fork())
-	exit(0);
-    
-    chdir("/");
-    umask(0);
-    (void) close(0);
-    (void) close(1);
-    (void) close(2);
-    (void) open("/", O_RDONLY);
-    (void) dup2(0, 1);
-    (void) dup2(0, 2);
-    setsid();
-}
-
-static void logopen(void)
-{
-    if(isDaemon)
-        openlog("icmpmonitor", LOG_PID| LOG_CONS|LOG_NOWAIT, LOG_USER);
-}
-
-static void logclose(void)
-{
-    if(isDaemon)
-        closelog();
 }
 
 /**
@@ -625,18 +583,9 @@ static void log(int type, char *format, ...)
     
     va_start(ap, format);
 
-    if(isDaemon)
-    {
-        char buffer[MAX_LOG_MSG_SIZE];
-            
-        (void)vsnprintf(buffer, MAX_LOG_MSG_SIZE, format, ap);
-        syslog(type,buffer);
-    } else
-    {
-        (void)  fprintf(stderr, "icmpmonitor[%d]:", (int)getpid());
-        (void) vfprintf(stderr, format, ap);
-        (void)  fprintf(stderr, "\n");
-    }
+    fprintf(stderr, "icmpmonitor[%d]:", (int)getpid());
+    vfprintf(stderr, format, ap);
+    fprintf(stderr, "\n");
     va_end(ap);
 }
 
