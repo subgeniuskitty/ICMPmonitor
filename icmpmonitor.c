@@ -38,17 +38,17 @@ struct monitor_host {
     char * name;
     int    ping_interval;
     int    max_delay;
-    char * upcmd;
-    char * downcmd;
+    char * up_cmd;
+    char * down_cmd;
 
     /* Calculated values */
     int                socket;
     struct timeval     last_ping_received;
     struct timeval     last_ping_sent;
-    bool               hostup;
+    bool               host_up;
     struct sockaddr_in dest;
-    unsigned int       sentpackets;
-    unsigned int       recvdpackets;
+    unsigned int       sent_packets;
+    unsigned int       recvd_packets;
 
     /* Linked list */
     struct monitor_host * next;
@@ -136,11 +136,11 @@ pinger(int ignore)
             tv_sub(&now, &p->last_ping_received);
 
             if (now.tv_sec > (p->max_delay + p->ping_interval)) {
-                if ((p->hostup) || retry_down_cmd) {
+                if ((p->host_up) || retry_down_cmd) {
                     if (verbose) printf("INFO: Host %s stopped responding. Executing DOWN command.\n", p->name);
-                    p->hostup = false;
+                    p->host_up = false;
                     if (!fork()) {
-                        system(p->downcmd);
+                        system(p->down_cmd);
                         exit(EXIT_SUCCESS);
                     } else {
                         wait(NULL);
@@ -175,7 +175,7 @@ pinger(int ignore)
                 if (i < 0 || i != cc) {
                     if (i<0) fprintf(stderr, "WARN: Failed sending ICMP packet to %s.\n", p->name);
                 }
-                p->sentpackets++;
+                p->sent_packets++;
             }
         }
         p = p->next;
@@ -215,7 +215,7 @@ read_icmp_data(struct monitor_host * p)
     }
 
     if (icmp->icmp_type == ICMP_ECHOREPLY && icmp->icmp_id == (getpid() & 0xFFFF) && icmp->icmp_seq == p->socket) {
-        p->recvdpackets++;
+        p->recvd_packets++;
 
         memcpy(&p->last_ping_received, &tv, sizeof(tv));
 
@@ -223,11 +223,11 @@ read_icmp_data(struct monitor_host * p)
         delay = tv.tv_sec * 1000 + (tv.tv_usec / 1000);
 
         if (verbose) printf("INFO: Got ICMP reply from %s in %d ms.\n", p->name, delay);
-        if (!p->hostup) {
+        if (!p->host_up) {
             if (verbose) printf("INFO: Host %s started responding. Executing UP command.\n", p->name);
-            p->hostup = true;
+            p->host_up = true;
             if (!fork()) {
-                system(p->upcmd);
+                system(p->up_cmd);
                 exit(EXIT_SUCCESS);
             } else {
                 wait(NULL);
@@ -317,16 +317,16 @@ parse_config(const char * conf_file)
                     break;
                 case 3:
                     strncat(key_buf, "up_cmd", MAXCONFKEYLEN);
-                    hosts[i]->upcmd = strdup(iniparser_getstring(conf, key_buf, NULL));
+                    hosts[i]->up_cmd = strdup(iniparser_getstring(conf, key_buf, NULL));
                     break;
                 case 4:
                     strncat(key_buf, "down_cmd", MAXCONFKEYLEN);
-                    hosts[i]->downcmd = strdup(iniparser_getstring(conf, key_buf, NULL));
+                    hosts[i]->down_cmd = strdup(iniparser_getstring(conf, key_buf, NULL));
                     break;
                 case 5:
                     /* TODO: Parse for up/down/auto in start_condition. */
                     /* TODO: Do a host up/down check if necessary. */
-                    hosts[i]->hostup = true;
+                    hosts[i]->host_up = true;
                     break;
             }
         }
@@ -336,8 +336,8 @@ parse_config(const char * conf_file)
             exit(EXIT_FAILURE);
         }
 
-        hosts[i]->sentpackets = 0;
-        hosts[i]->recvdpackets = 0;
+        hosts[i]->sent_packets = 0;
+        hosts[i]->recvd_packets = 0;
         hosts[i]->socket = -1;
         hosts[i]->next = NULL;
         if (i>0) hosts[i-1]->next = hosts[i];
