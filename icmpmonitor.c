@@ -591,12 +591,7 @@ static void log(int type, char *format, ...)
 
 static int gcd(int x, int y)
 {
-    while(x!=y)
-    {
-        if(x<y)
-            y-=x;
-        else 
-            x-=y;
-    }
-    return x;
+    int remainder = x % y;
+    if (remainder == 0) return y;
+    return gcd(y, remainder);
 }
