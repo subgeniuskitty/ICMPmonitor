@@ -54,7 +54,6 @@ struct monitor_host {
 static struct monitor_host ** hosts       = NULL;
 static int                    isVerbose   = 0;
 static int                    keepBanging = 0;
-static unsigned short         ident;
 static int                    send_delay  = 1;
 
 /*
@@ -151,7 +150,7 @@ pinger(int ignore)
                 icp->icmp_code  = 0;
                 icp->icmp_cksum = 0;
                 icp->icmp_seq   = p->socket;
-                icp->icmp_id    = ident;
+                icp->icmp_id    = getpid() & 0xFFFF;
 
                 if (isVerbose) printf("INFO: Sending ICMP packet to %s.\n", p->name);
 
@@ -208,7 +207,7 @@ read_icmp_data(struct monitor_host * p)
         return;
     }
 
-    if (icmp->icmp_type == ICMP_ECHOREPLY && icmp->icmp_id == ident && icmp->icmp_seq == p->socket) {
+    if (icmp->icmp_type == ICMP_ECHOREPLY && icmp->icmp_id == (getpid() & 0xFFFF) && icmp->icmp_seq == p->socket) {
         p->recvdpackets++;
 
         memcpy(&p->last_ping_received, &tv, sizeof(tv));
@@ -420,8 +419,6 @@ main(int argc, char ** argv)
     read_hosts(cfgfile);
 
     init_hosts();
-
-    ident = getpid() & 0xFFFF;
 
     signal(SIGALRM, pinger);
     alarm(send_delay);
