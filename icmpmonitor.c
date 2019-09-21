@@ -1,5 +1,6 @@
 /*
  * Monitor hosts using ICMP "echo" and notify when down.
+ * TODO: Write a better description.
  *
  * © 2019 Aaron Taylor <ataylor at subgeniuskitty dot com>
  * © 1999 Vadim Zaliva <lord@crocodile.org>
@@ -23,12 +24,15 @@
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
 #include <errno.h>
-
-#include "cfg.h"
+#include "iniparser/iniparser.h"
 
 #define MAXPACKETSIZE  (65536 - 60 - 8) /* TODO: What are the magic numbers? */
 #define DEFAULTDATALEN (64 - 8)         /* TODO: What are the magic numbers? */
 
+/* Must be larger than the length of the longest configuration key (currently 'start_condition'). */
+#define MAXCONFKEYLEN 20
+
+/* One struct per host as listed in the config file. */
 struct monitor_host {
     /* From the config file */
     char * name;
@@ -269,65 +273,77 @@ get_response(void)
     }
 }
 
+/*
+ * Parses `config_file` and creates relevant entries under the global variable `hosts`.
+ */
 static void
-read_hosts(const char * cfg_file_name)
+parse_config(const char * conf_file)
 {
-    int i, n = 0;
-    struct Cfg * cfg;
-
-    if ((cfg = readcfg(cfg_file_name)) == NULL) {
-        fprintf(stderr, "ERROR: Failed to read config.\n");
+    dictionary * conf = iniparser_load(conf_file);
+    if (conf == NULL) {
+        fprintf(stderr, "ERROR: Unable to parse configuration file %s.\n", conf_file);
         exit(EXIT_FAILURE);
     }
 
-    if (cfg->nelements) {
-        hosts = malloc(sizeof(struct monitor_host *) * cfg->nelements);
-        for (i = 0; i < cfg->nelements; i++) {
-            if (cfg->dict[i]->nvalues < 4) {
-                fprintf(stderr, "ERROR: Not enough fields in record %d of cfg file. Got %d.\n", n, cfg->dict[i]->nvalues+1);
-                exit(EXIT_FAILURE);
-            } else if (cfg->dict[i]->nvalues>5) {
-                fprintf(stderr, "ERROR: Too many fields in record %d of cfg file. Got %d.\n", n, cfg->dict[i]->nvalues+1);
-                exit(EXIT_FAILURE);
+    int host_count = iniparser_getnsec(conf);
+    if (host_count < 1 ) {
+        fprintf(stderr, "ERROR: Unable to determine number of hosts in configuration file.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    hosts = malloc(sizeof(struct monitor_host *) * host_count);
+    for (int i=0; i < host_count; i++) {
+        /* Allocate a buffer large enough to hold the full 'section:key' string. */
+        int section_len = strlen(iniparser_getsecname(conf, i));
+        char * key_buf = malloc(section_len + 1 + MAXCONFKEYLEN + 1);
+        strcpy(key_buf, iniparser_getsecname(conf, i));
+        key_buf[section_len++] = ':';
+
+        hosts[i] = malloc(sizeof(struct monitor_host));
+        for (int k=0; k<6; k++) {
+            key_buf[section_len] = '\0'; /* Reuse the section name and colon on each pass through this loop. */
+            switch (k) {
+                case 0:
+                    strncat(key_buf, "host", MAXCONFKEYLEN);
+                    hosts[i]->name = strdup(iniparser_getstring(conf, key_buf, NULL));
+                    break;
+                case 1:
+                    strncat(key_buf, "interval", MAXCONFKEYLEN);
+                    hosts[i]->ping_interval = iniparser_getint(conf, key_buf, -1);
+                    break;
+                case 2:
+                    strncat(key_buf, "max_delay", MAXCONFKEYLEN);
+                    hosts[i]->max_delay = iniparser_getint(conf, key_buf, -1);
+                    break;
+                case 3:
+                    strncat(key_buf, "up_cmd", MAXCONFKEYLEN);
+                    hosts[i]->upcmd = strdup(iniparser_getstring(conf, key_buf, NULL));
+                    break;
+                case 4:
+                    strncat(key_buf, "down_cmd", MAXCONFKEYLEN);
+                    hosts[i]->downcmd = strdup(iniparser_getstring(conf, key_buf, NULL));
+                    break;
+                case 5:
+                    /* TODO: Parse for up/down/auto in start_condition. */
+                    /* TODO: Do a host up/down check if necessary. */
+                    hosts[i]->hostup = true;
+                    break;
             }
-
-            hosts[n]                = malloc(sizeof(struct monitor_host));
-            hosts[n]->name          = strdup(cfg->dict[i]->name);
-            hosts[n]->ping_interval = atoi  (cfg->dict[i]->value[0]);
-            hosts[n]->max_delay     = atoi  (cfg->dict[i]->value[1]);
-            hosts[n]->upcmd         = strdup(cfg->dict[i]->value[2]);
-            hosts[n]->downcmd       = strdup(cfg->dict[i]->value[3]);
-
-        if (cfg->dict[i]->nvalues == 4) {
-            hosts[n]->hostup = true;
-        } else if (strcmp(cfg->dict[i]->value[4], "up") == 0) {
-            hosts[n]->hostup = true;
-        } else if (strcmp(cfg->dict[i]->value[4], "down") == 0) {
-            hosts[n]->hostup = false;
-        } else if (strcmp(cfg->dict[i]->value[4], "auto") == 0) {
-            /* TODO: Send a ping and set initial state accordingly. */
-        } else {
-            fprintf(stderr, "ERROR: Illegal value %s in record %d for startup condition.\n", cfg->dict[i]->value[4], n);
+        }
+        /* TODO: Do I want to make any checks for up_cmd, down_cmd, and start_condition? */
+        if (hosts[i]->name == NULL || hosts[i]->ping_interval == -1 || hosts[i]->max_delay == -1) {
+            fprintf(stderr, "ERROR: Problems parsing section %s.\n", iniparser_getsecname(conf, i));
             exit(EXIT_FAILURE);
         }
-            hosts[n]->sentpackets   = 0;
-            hosts[n]->recvdpackets  = 0;
 
-            hosts[n]->socket           = -1;
-            hosts[n]->next             = NULL;
-            if (n > 0) hosts[n-1]->next=hosts[n];
-            gettimeofday(&(hosts[n]->last_ping_received), (struct timezone *)NULL);
-
-            n++;
-        }
+        hosts[i]->sentpackets = 0;
+        hosts[i]->recvdpackets = 0;
+        hosts[i]->socket = -1;
+        hosts[i]->next = NULL;
+        if (i>0) hosts[i-1]->next = hosts[i];
+        gettimeofday(&(hosts[i]->last_ping_received), (struct timezone *) NULL);
     }
-
-    freecfg(cfg);
-
-    if (n <= 0) {
-        fprintf(stderr, "ERROR: No hosts defined in cfg file, exiting.\n");
-        exit(EXIT_FAILURE);
-    }
+    iniparser_freedict(conf);
 }
 
 static int
@@ -389,14 +405,16 @@ init_hosts(void)
     }
 }
 
-int
-main(int argc, char ** argv)
+void
+print_usage(void)
 {
-    extern char * optarg;
-    extern int optind;
-    char * cfgfile = NULL;
-    int param;
+    fprintf(stderr,"Usage: icmpmonitor [-v] [-r] [-f cfgfile]\n");
+}
 
+void
+parse_params(int argc, char ** argv)
+{
+    int param;
     while ((param = getopt(argc, argv, "rvf:")) != -1) {
         switch(param) {
             case 'v':
@@ -406,20 +424,23 @@ main(int argc, char ** argv)
                 retry_down_cmd = true;
                 break;
             case 'f':
-                cfgfile=strdup(optarg);
+                parse_config(optarg);
                 break;
             default:
-                fprintf(stderr,"Usage: icmpmonitor [-v] [-r] [-f cfgfile]\n");
+                print_usage();
                 exit(EXIT_FAILURE);
         }
     }
-
-    if (!cfgfile) {
-        fprintf(stderr, "ERROR: No config file specified.\n");
+    if (hosts == NULL) {
+        fprintf(stderr, "ERROR: Unable to parse a config file.\n");
         exit(EXIT_FAILURE);
     }
+}
 
-    read_hosts(cfgfile);
+int
+main(int argc, char ** argv)
+{
+    parse_params(argc, argv);
 
     init_hosts();
 
