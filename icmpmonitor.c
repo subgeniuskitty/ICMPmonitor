@@ -46,15 +46,18 @@ struct monitor_host {
     unsigned int       sentpackets;
     unsigned int       recvdpackets;
 
-    /* linked list */
+    /* Linked list */
     struct monitor_host * next;
 };
 
-/* globals */
-static struct monitor_host ** hosts       = NULL;
-static bool                   verbose     = false;
-static int                    keepBanging = 0;
-static int                    send_delay  = 1;
+/* Globals */
+    /* Since the program is based around signals, a linked list of hosts is maintained here. */
+    static struct monitor_host ** hosts          = NULL;
+    /* Set by command line flags. */
+    static bool                   verbose        = false;
+    static bool                   retry_down_cmd = false;
+    /* TODO: Get rid of this global. */
+    static int                    send_delay     = 1;
 
 /*
  * Checksum routine for Internet Protocol family headers
@@ -96,7 +99,7 @@ in_cksum(unsigned short * addr, int len)
  * Modifies out = out - in.
  */
 static void
-tvsub(register struct timeval * out, register struct timeval * in)
+tv_sub(register struct timeval * out, register struct timeval * in)
 {
     if ((out->tv_usec -= in->tv_usec) < 0) {
         --out->tv_sec;
@@ -126,10 +129,10 @@ pinger(int ignore)
             struct timeval now;
 
             gettimeofday(&now, (struct timezone *) NULL);
-            tvsub(&now, &p->last_ping_received);
+            tv_sub(&now, &p->last_ping_received);
 
             if (now.tv_sec > (p->max_delay + p->ping_interval)) {
-                if ((p->hostup) || keepBanging) {
+                if ((p->hostup) || retry_down_cmd) {
                     if (verbose) printf("INFO: Host %s stopped responding. Executing DOWN command.\n", p->name);
                     p->hostup = false;
                     if (!fork()) {
@@ -142,7 +145,7 @@ pinger(int ignore)
             }
 
             gettimeofday(&now, (struct timezone *) NULL);
-            tvsub(&now, &p->last_ping_sent);
+            tv_sub(&now, &p->last_ping_sent);
 
             if (now.tv_sec > p->ping_interval) { /* Time to send ping */
                 icp = (struct icmp *) outpack;
@@ -212,7 +215,7 @@ read_icmp_data(struct monitor_host * p)
 
         memcpy(&p->last_ping_received, &tv, sizeof(tv));
 
-        tvsub(&tv, (struct timeval *) &icmp->icmp_data[0]);
+        tv_sub(&tv, (struct timeval *) &icmp->icmp_data[0]);
         delay = tv.tv_sec * 1000 + (tv.tv_usec / 1000);
 
         if (verbose) printf("INFO: Got ICMP reply from %s in %d ms.\n", p->name, delay);
@@ -328,7 +331,7 @@ read_hosts(const char * cfg_file_name)
 }
 
 static int
-gethostaddr(const char * name)
+get_host_addr(const char * name)
 {
     static int res;
     struct hostent * he;
@@ -364,7 +367,7 @@ init_hosts(void)
     while (p) {
         bzero(&p->dest, sizeof(p->dest));
         p->dest.sin_family = AF_INET;
-        if ((p->dest.sin_addr.s_addr = gethostaddr(p->name)) <= 0) {
+        if ((p->dest.sin_addr.s_addr = get_host_addr(p->name)) <= 0) {
             fprintf(stderr, "WARN: Can't resolve host. Skipping client %s.\n", p->name);
             p->socket=-1;
         } else {
@@ -400,7 +403,7 @@ main(int argc, char ** argv)
                 verbose = true;
                 break;
             case 'r':
-                keepBanging = 1;
+                retry_down_cmd = true;
                 break;
             case 'f':
                 cfgfile=strdup(optarg);
