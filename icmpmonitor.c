@@ -43,7 +43,6 @@
 #define	DEFDATALEN	(64 - 8)	 /* default data length */
 
 #define VERSION "ICMPmonitor v1.2 by lord@crocodile.org"
-#define MAX_LOG_MSG_SIZE 4096
 
 # define icmphdr			icmp
 
@@ -73,7 +72,6 @@ typedef struct monitor_host
 } monitor_host_t;
 
 /* protos */
-static void log(int type, char *format, ...);
 static int  gethostaddr(const char *name);
 static void read_hosts(const char *cfg_file_name);
 static void init_hosts(void);
@@ -93,14 +91,24 @@ static int             keepBanging = 0;
 static unsigned short  ident;
 static int             send_delay  = 1;
 
+
+
+
+
+
+
+
+
+
+
+
+
 int main(int ac, char **av)
 {
     extern char* optarg;
     extern int   optind;
     char         *cfgfile=NULL;
     int          param;
-    
-    log(LOG_INFO, VERSION " is starting.");
 
     while((param = getopt(ac, av, "rvf:")) != -1)
   	switch(param)
@@ -119,10 +127,9 @@ int main(int ac, char **av)
             done(RET_BAD_OPT);
  	} 
     
-    if(!cfgfile)
-    {
-        log(LOG_WARNING,"No cfg file specified. Assuming 'icmpmonitor.cfg'");
-	cfgfile="icmpmonitor.cfg";
+    if (!cfgfile) {
+        fprintf(stderr, "ERROR: No config file specified.\n");
+        exit(EXIT_FAILURE);
     }
 
     read_hosts(cfgfile);
@@ -208,8 +215,7 @@ static void pinger(int ignore)
                 {
 		    p->down = 1;
                     
-                    if(isVerbose)
-                        log(LOG_INFO,"Host %s in down. Executing DOWN command",p->name);
+                    if (isVerbose) printf("INFO: Host %s is down. Executing DOWN command.\n", p->name);
                     if(!fork())
                     {
                         system(p->downcmd);
@@ -235,8 +241,7 @@ static void pinger(int ignore)
                 icp->icmp_seq   = p->socket;
                 icp->icmp_id    = ident;			
 
-                if(isVerbose)
-                    log(LOG_INFO,"Sending ICMP packet to %s.",p->name);
+                if (isVerbose) printf("INFO: Sending ICMP packet to %s.\n", p->name);
                 
                 (void)gettimeofday((struct timeval *)&outpack[8],
                                    (struct timezone *)NULL);
@@ -254,8 +259,7 @@ static void pinger(int ignore)
                 
                 if(i<0 || i!=cc)
                 {
-                    if(i<0)
-                        log(LOG_WARNING,"Sending ICMP packet to %s failed.",p->name);
+                    if (i<0) fprintf(stderr, "WARN: Failed sending ICMP packet to %s.\n", p->name);
                 }
                 p->sentpackets++;
             }
@@ -300,7 +304,6 @@ static void get_response(void)
         {
             if(retval>0)
             {
-                /* log(LOG_DEBUG,"ICMP data is available now."); */
                 p=hosts[0];
                 while(p)
                 {
@@ -311,9 +314,8 @@ static void get_response(void)
                     }
                     p=p->next;
                 }
-            } else
-            {
-                log(LOG_DEBUG,"select returns 0."); /* TODO */
+            } else {
+                /* TODO: How to handle this error? */
             }
         }
     }
@@ -334,24 +336,18 @@ static void read_icmp_data(monitor_host_t *p)
     (void)gettimeofday(&tv, (struct timezone *)NULL);
     
     fromlen = sizeof(from);
-    if((cc = recvfrom(p->socket, buf, sizeof(buf), 0,
-                      (struct sockaddr *)&from, &fromlen)) < 0)
-    {
-        if(errno != EINTR)
-            log(LOG_WARNING,"Error reading ICMP data from %s.",p->name);
+    if ((cc = recvfrom(p->socket, buf, sizeof(buf), 0, (struct sockaddr *)&from, &fromlen)) < 0) {
+        if (errno != EINTR) fprintf(stderr, "WARN: Error reading ICMP data from %s.\n", p->name);
         return;
     } 
-
-    /* log(LOG_DEBUG,"Got %d bytes of ICMP data from %s.",cc, p->name); */
 
     /* check IP header actual len */ 
     ip       = (struct ip *)buf               ; 
     iphdrlen = ip->ip_hl<<2                   ; 
     icmp     = (struct icmp *) (buf+iphdrlen) ;
     
-    if(cc < iphdrlen+ICMP_MINLEN)
-    {
-        log(LOG_WARNING,"Received short packet from %s.",p->name);
+    if (cc < iphdrlen + ICMP_MINLEN) {
+        fprintf(stderr, "WARN: Received short packet from %s.\n", p->name);
         return;
     }
     
@@ -366,14 +362,12 @@ static void read_icmp_data(monitor_host_t *p)
         tvsub(&tv, (struct timeval *) &icmp->icmp_data[0]);
         delay=tv.tv_sec*1000+(tv.tv_usec/1000);
         
-        if(isVerbose)
-            log(LOG_INFO,"Got ICMP reply from %s in %d ms.",p->name,delay);
+        if(isVerbose) printf("INFO: Got ICMP reply from %s in %d ms.\n", p->name, delay);
 	p->down=0;
         if(!p->up)
         {
             p->up=1;
-            if(isVerbose)
-                log(LOG_INFO,"Host %s in now up. Executing UP command",p->name);
+            if (isVerbose) printf("INFO: Host %s is up. Executing UP command.\n", p->name);
             if(!fork())
             {
                 system(p->upcmd);
@@ -383,14 +377,8 @@ static void read_icmp_data(monitor_host_t *p)
                 wait(NULL);
             }
         }
-    } else
-    {
-        /*
-          log(LOG_DEBUG,"ICMP packet of type %d from %s. Ident=%d",icmp->icmp_type,
-          p->name,
-          icmp->icmp_id
-          );
-        */
+    } else {
+        /* TODO: Do anything here? */
     }
 }
 
@@ -399,28 +387,23 @@ static void read_hosts(const char *cfg_file_name)
     int    i,n=0;
     struct Cfg *cfg;
     
-    if((cfg=readcfg(cfg_file_name))==NULL)
-    {
-        log(LOG_ERR,"Error reading cfg. Exiting.");
-        done(RET_BAD_CFG);
+    if ((cfg = readcfg(cfg_file_name)) == NULL) {
+        fprintf(stderr, "ERROR: Failed to read config.\n");
+        exit(EXIT_FAILURE);
     }
     
-    if(cfg->nelements)
-    {
-        hosts=malloc(sizeof(monitor_host_t *)*cfg->nelements);
-        for(i=0;i<cfg->nelements;i++)
-        {
-            if(cfg->dict[i]->nvalues<4)
-            {
-                log(LOG_ERR,"Not enough fields in record %d of cfg file. Got %d.",n, cfg->dict[i]->nvalues+1);
-                done(RET_BAD_CFG);
-            } else if(cfg->dict[i]->nvalues>5)
-            {
-                log(LOG_ERR,"Too many fields in record %d of cfg file. Got %d.",n, cfg->dict[i]->nvalues+1);
-                done(RET_BAD_CFG);
+    if (cfg->nelements) {
+        hosts = malloc(sizeof(monitor_host_t *) * cfg->nelements);
+        for (i=0; i<cfg->nelements; i++) {
+            if (cfg->dict[i]->nvalues < 4) {
+                fprintf(stderr, "ERROR: Not enough fields in record %d of cfg file. Got %d.\n", n, cfg->dict[i]->nvalues+1);
+                exit(EXIT_FAILURE);
+            } else if (cfg->dict[i]->nvalues>5) {
+                fprintf(stderr, "ERROR: Too many fields in record %d of cfg file. Got %d.\n", n, cfg->dict[i]->nvalues+1);
+                exit(EXIT_FAILURE);
             }
             
-            hosts[n]=malloc(sizeof(monitor_host_t));
+            hosts[n]                = malloc(sizeof(monitor_host_t));
             hosts[n]->name          = strdup(cfg->dict[i]->name);
             hosts[n]->ping_interval = atoi  (cfg->dict[i]->value[0]);
             hosts[n]->max_delay     = atoi  (cfg->dict[i]->value[1]);
@@ -447,19 +430,17 @@ static void read_hosts(const char *cfg_file_name)
 	    {
 		hosts[n]->down = 0;
 		hosts[n]->up   = 0;
-	    } else
-	    {
-		log(LOG_ERR,"Illegal value %s in record %n for startup condition.", cfg->dict[i]->value[4], n);
-		done(RET_BAD_CFG);
+	    } else {
+		fprintf(stderr, "ERROR: Illegal value %s in record %n for startup condition.\n", cfg->dict[i]->value[4], n);
+		exit(EXIT_FAILURE);
 	    }
             hosts[n]->sentpackets   = 0;
             hosts[n]->recvdpackets  = 0;
 
             hosts[n]->socket           = -1;
-            hosts[n]->next             = nil;
-            if(n>0)
-                hosts[n-1]->next=hosts[n];
-            (void)gettimeofday(&(hosts[n]->last_ping_received), (struct timezone *)NULL);
+            hosts[n]->next             = NULL;
+            if (n > 0) hosts[n-1]->next=hosts[n];
+            gettimeofday(&(hosts[n]->last_ping_received), (struct timezone *)NULL);
 
             n++;
         } 
@@ -467,14 +448,10 @@ static void read_hosts(const char *cfg_file_name)
 
     freecfg(cfg);
 
-    if(n<=0)
-    {
-        log(LOG_ERR,"No hosts defined in cfg file, exiting.");
-        done(RET_NO_HOSTS);
+    if (n <= 0) {
+        fprintf(stderr, "ERROR: No hosts defined in cfg file, exiting.\n");
+        exit(EXIT_FAILURE);
     }
-    else
-        log(LOG_DEBUG,"%d host(s) found in cfg file,", n);
-    
 }
 
 static int gethostaddr(const char *name)
@@ -498,27 +475,23 @@ static void init_hosts(void)
     struct protoent   *proto;
     int ok=0;
 
-    if((proto=getprotobyname("icmp"))==NULL)
-    {
-        log(LOG_ERR,"Unknown protocol: icmp. Exiting.");
-        done(RET_INIT_ERROR);
+    if ((proto = getprotobyname("icmp")) == NULL) {
+        fprintf(stderr, "ERROR: Unknown protocol: icmp.\n");
+        exit(EXIT_FAILURE);
     }
     
-    while(p)
-    {
-        log(LOG_DEBUG,"resolving host %s", p->name);
-        
+    while(p) {
         bzero(&p->dest,sizeof(p->dest));
         p->dest.sin_family=AF_INET;
         if((p->dest.sin_addr.s_addr=gethostaddr(p->name))<=0)
         {
-            log(LOG_ERR,"Can't resolve host. Skipping client %s.",p->name);
+            fprintf(stderr, "WARN: Can't resolve host. Skipping client %s.\n", p->name);
             p->socket=-1;
         } else
         {
             if((p->socket=socket(AF_INET,SOCK_RAW,proto->p_proto))<0)
             {
-                log(LOG_ERR,"Can't create socket. Skipping client %s.",p->name);
+                fprintf(stderr, "WARN: Can't create socket. Skipping client %s.\n", p->name);
                 p->socket=-1;
             } else
             {
@@ -534,8 +507,8 @@ static void init_hosts(void)
 
     if(!ok)
     {
-        log(LOG_ERR,"No hosts left to process, exiting.");
-        done(RET_NO_HOSTS);
+        fprintf(stderr, "ERROR: No hosts left to process.\n");
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -557,36 +530,6 @@ tvsub(register struct timeval *out, register struct timeval *in)
 void done(int code)
 {
     exit(code);
-}
-
-/**
- * This function should be used as central logging facility.
- * 'type' argument should be one of following:
- *
- *  LOG_EMERG	system is unusable 
- *  LOG_ALERT	action must be taken immediately 
- *  LOG_CRIT	critical conditions 
- *  LOG_ERR	error conditions 
- *  LOG_WARNING	warning conditions 
- *  LOG_NOTICE	normal but significant condition 
- *  LOG_INFO	informational 
- *  LOG_DEBUG	debug-level messages 
- */
-static void log(int type, char *format, ...)
-{
-    va_list ap;
-
-#ifndef DEBUG
-    if(type==LOG_DEBUG)
-        return;
-#endif
-    
-    va_start(ap, format);
-
-    fprintf(stderr, "icmpmonitor[%d]:", (int)getpid());
-    vfprintf(stderr, format, ap);
-    fprintf(stderr, "\n");
-    va_end(ap);
 }
 
 static int gcd(int x, int y)
