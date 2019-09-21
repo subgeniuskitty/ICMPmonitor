@@ -52,7 +52,7 @@ struct monitor_host {
 
 /* globals */
 static struct monitor_host ** hosts       = NULL;
-static int                    isVerbose   = 0;
+static bool                   verbose     = false;
 static int                    keepBanging = 0;
 static int                    send_delay  = 1;
 
@@ -130,7 +130,7 @@ pinger(int ignore)
 
             if (now.tv_sec > (p->max_delay + p->ping_interval)) {
                 if ((p->hostup) || keepBanging) {
-                    if (isVerbose) printf("INFO: Host %s stopped responding. Executing DOWN command.\n", p->name);
+                    if (verbose) printf("INFO: Host %s stopped responding. Executing DOWN command.\n", p->name);
                     p->hostup = false;
                     if (!fork()) {
                         system(p->downcmd);
@@ -152,7 +152,7 @@ pinger(int ignore)
                 icp->icmp_seq   = p->socket;
                 icp->icmp_id    = getpid() & 0xFFFF;
 
-                if (isVerbose) printf("INFO: Sending ICMP packet to %s.\n", p->name);
+                if (verbose) printf("INFO: Sending ICMP packet to %s.\n", p->name);
 
                 gettimeofday((struct timeval *) &outpack[8], (struct timezone *) NULL);
 
@@ -215,9 +215,9 @@ read_icmp_data(struct monitor_host * p)
         tvsub(&tv, (struct timeval *) &icmp->icmp_data[0]);
         delay = tv.tv_sec * 1000 + (tv.tv_usec / 1000);
 
-        if (isVerbose) printf("INFO: Got ICMP reply from %s in %d ms.\n", p->name, delay);
+        if (verbose) printf("INFO: Got ICMP reply from %s in %d ms.\n", p->name, delay);
         if (!p->hostup) {
-            if (isVerbose) printf("INFO: Host %s started responding. Executing UP command.\n", p->name);
+            if (verbose) printf("INFO: Host %s started responding. Executing UP command.\n", p->name);
             p->hostup = true;
             if (!fork()) {
                 system(p->upcmd);
@@ -397,7 +397,7 @@ main(int argc, char ** argv)
     while ((param = getopt(argc, argv, "rvf:")) != -1) {
         switch(param) {
             case 'v':
-                isVerbose = 1;
+                verbose = true;
                 break;
             case 'r':
                 keepBanging = 1;
