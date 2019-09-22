@@ -1,10 +1,13 @@
 /*
- * Monitor hosts using ICMP "echo" and notify when down.
- * TODO: Write a better description.
+ * ICMPmonitor
+ *
+ * Monitors hosts using ICMP 'echo', executing a user-specified command
+ * whenever hosts change state between responsive and unresponsive.
  *
  * © 2019 Aaron Taylor <ataylor at subgeniuskitty dot com>
  * © 1999 Vadim Zaliva <lord@crocodile.org>
  * © 1989 The Regents of the University of California & Mike Muuss
+ *
  * See LICENSE file for copyright and license details.
  */
 
@@ -24,6 +27,7 @@
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
 #include <errno.h>
+
 #include "iniparser/iniparser.h"
 
 #define VERSION 2
@@ -123,7 +127,7 @@ tv_sub(register struct timeval * out, register struct timeval * in)
 static void
 pinger(int ignore)
 {
-    int cc, i;
+    int i;
     struct icmp * icp;
     struct monitor_host * p;
     u_char outpack[MAXPACKETSIZE];
@@ -164,7 +168,7 @@ pinger(int ignore)
 
                 gettimeofday((struct timeval *) &outpack[8], (struct timezone *) NULL);
 
-                cc = DEFAULTDATALEN + 8;  /* skips ICMP portion */
+                int cc = DEFAULTDATALEN + 8;  /* skips ICMP portion */
 
                 /* compute ICMP checksum */
                 icp->icmp_cksum = in_cksum((unsigned short *) icp, cc);
