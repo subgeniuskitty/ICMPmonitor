@@ -61,11 +61,10 @@ struct monitor_host {
 /* Globals */
     /* Since the program is based around signals, a linked list of hosts is maintained here. */
     static struct monitor_host * hosts          = NULL;
+    static int                   send_delay     = 1;
     /* Set by command line flags. */
     static bool                  verbose        = false;
     static bool                  retry_down_cmd = false;
-    /* TODO: Get rid of this global. */
-    static int                   send_delay     = 1;
 
 /*
  * Checksum routine for Internet Protocol family headers
