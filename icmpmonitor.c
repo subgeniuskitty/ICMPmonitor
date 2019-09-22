@@ -49,8 +49,6 @@ struct monitor_host {
     struct timeval     last_ping_sent;
     bool               host_up;
     struct sockaddr_in dest;
-    unsigned int       sent_packets;
-    unsigned int       recvd_packets;
 
     /* TODO: Why are we using both a linked list AND an array for this data? */
     /* Linked list */
@@ -178,7 +176,6 @@ pinger(int ignore)
                 if (i < 0 || i != cc) {
                     if (i<0) fprintf(stderr, "WARN: Failed sending ICMP packet to %s.\n", p->name);
                 }
-                p->sent_packets++;
             }
         }
         p = p->next;
@@ -218,7 +215,6 @@ read_icmp_data(struct monitor_host * p)
     }
 
     if (icmp->icmp_type == ICMP_ECHOREPLY && icmp->icmp_id == (getpid() & 0xFFFF) && icmp->icmp_seq == p->socket) {
-        p->recvd_packets++;
 
         memcpy(&p->last_ping_received, &tv, sizeof(tv));
 
@@ -332,8 +328,6 @@ parse_config(const char * conf_file)
             exit(EXIT_FAILURE);
         }
 
-        hosts[i]->sent_packets = 0;
-        hosts[i]->recvd_packets = 0;
         hosts[i]->socket = -1;
         hosts[i]->next = NULL;
         if (i>0) hosts[i-1]->next = hosts[i];
