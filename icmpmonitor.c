@@ -26,6 +26,8 @@
 #include <errno.h>
 #include "iniparser/iniparser.h"
 
+#define VERSION 2
+
 #define MAXPACKETSIZE  (65536 - 60 - 8) /* TODO: What are the magic numbers? */
 #define DEFAULTDATALEN (64 - 8)         /* TODO: What are the magic numbers? */
 
@@ -50,6 +52,7 @@ struct monitor_host {
     unsigned int       sent_packets;
     unsigned int       recvd_packets;
 
+    /* TODO: Why are we using both a linked list AND an array for this data? */
     /* Linked list */
     struct monitor_host * next;
 };
@@ -250,7 +253,7 @@ get_response(void)
         FD_ZERO(&rfds);
         while (p) {
             if (p->socket != -1) {
-                if (p->socket > maxd) maxd=p->socket;
+                if (p->socket > maxd) maxd = p->socket;
                 FD_SET(p->socket, &rfds);
             }
             p = p->next;
@@ -273,9 +276,6 @@ get_response(void)
     }
 }
 
-/*
- * Parses `config_file` and creates relevant entries under the global variable `hosts`.
- */
 static void
 parse_config(const char * conf_file)
 {
@@ -293,44 +293,40 @@ parse_config(const char * conf_file)
 
     hosts = malloc(sizeof(struct monitor_host *) * host_count);
     for (int i=0; i < host_count; i++) {
-        /* Allocate a buffer large enough to hold the full 'section:key' string. */
+        /* Allocate a reusable buffer large enough to hold the full 'section:key' string. */
         int section_len = strlen(iniparser_getsecname(conf, i));
         char * key_buf = malloc(section_len + 1 + MAXCONFKEYLEN + 1);
         strcpy(key_buf, iniparser_getsecname(conf, i));
         key_buf[section_len++] = ':';
 
         hosts[i] = malloc(sizeof(struct monitor_host));
-        for (int k=0; k<6; k++) {
-            key_buf[section_len] = '\0'; /* Reuse the section name and colon on each pass through this loop. */
-            switch (k) {
-                case 0:
-                    strncat(key_buf, "host", MAXCONFKEYLEN);
-                    hosts[i]->name = strdup(iniparser_getstring(conf, key_buf, NULL));
-                    break;
-                case 1:
-                    strncat(key_buf, "interval", MAXCONFKEYLEN);
-                    hosts[i]->ping_interval = iniparser_getint(conf, key_buf, -1);
-                    break;
-                case 2:
-                    strncat(key_buf, "max_delay", MAXCONFKEYLEN);
-                    hosts[i]->max_delay = iniparser_getint(conf, key_buf, -1);
-                    break;
-                case 3:
-                    strncat(key_buf, "up_cmd", MAXCONFKEYLEN);
-                    hosts[i]->up_cmd = strdup(iniparser_getstring(conf, key_buf, NULL));
-                    break;
-                case 4:
-                    strncat(key_buf, "down_cmd", MAXCONFKEYLEN);
-                    hosts[i]->down_cmd = strdup(iniparser_getstring(conf, key_buf, NULL));
-                    break;
-                case 5:
-                    /* TODO: Parse for up/down/auto in start_condition. */
-                    /* TODO: Do a host up/down check if necessary. */
-                    hosts[i]->host_up = true;
-                    break;
-            }
-        }
-        /* TODO: Do I want to make any checks for up_cmd, down_cmd, and start_condition? */
+
+        key_buf[section_len] = '\0';
+        strncat(key_buf, "host", MAXCONFKEYLEN);
+        hosts[i]->name = strdup(iniparser_getstring(conf, key_buf, NULL));
+
+        key_buf[section_len] = '\0';
+        strncat(key_buf, "interval", MAXCONFKEYLEN);
+        hosts[i]->ping_interval = iniparser_getint(conf, key_buf, -1);
+
+        key_buf[section_len] = '\0';
+        strncat(key_buf, "max_delay", MAXCONFKEYLEN);
+        hosts[i]->max_delay = iniparser_getint(conf, key_buf, -1);
+
+        key_buf[section_len] = '\0';
+        strncat(key_buf, "up_cmd", MAXCONFKEYLEN);
+        hosts[i]->up_cmd = strdup(iniparser_getstring(conf, key_buf, NULL));
+
+        key_buf[section_len] = '\0';
+        strncat(key_buf, "down_cmd", MAXCONFKEYLEN);
+        hosts[i]->down_cmd = strdup(iniparser_getstring(conf, key_buf, NULL));
+
+        key_buf[section_len] = '\0';
+        /* TODO: Parse for up/down/auto in start_condition. */
+        /* TODO: Do a host up/down check if necessary. */
+        hosts[i]->host_up = true;
+
+        /* TODO: Do I want to make any checks for start_condition? */
         if (hosts[i]->name == NULL || hosts[i]->ping_interval == -1 || hosts[i]->max_delay == -1) {
             fprintf(stderr, "ERROR: Problems parsing section %s.\n", iniparser_getsecname(conf, i));
             exit(EXIT_FAILURE);
@@ -350,12 +346,12 @@ static int
 get_host_addr(const char * name)
 {
     static int res;
-    struct hostent * he;
+    struct hostent * host_ent;
 
     if ((res = inet_addr(name)) < 0) {
-    he = gethostbyname(name);
-        if (!he) return -1;
-        memcpy(&res, he->h_addr, he->h_length);
+        host_ent = gethostbyname(name);
+        if (!host_ent) return -1;
+        memcpy(&res, host_ent->h_addr, host_ent->h_length);
     }
     return(res);
 }
@@ -406,16 +402,23 @@ init_hosts(void)
 }
 
 void
-print_usage(void)
+print_usage(char ** argv)
 {
-    fprintf(stderr,"Usage: icmpmonitor [-v] [-r] [-f cfgfile]\n");
+    printf( "ICMPmonitor v%d (www.subgeniuskitty.com)\n"
+            "Usage: %s [-h] [-v] [-r] -f <file>\n"
+            "  -v         Verbose mode. Prints message for each packet sent and received.\n"
+            "  -r         Repeat down_cmd every time a host fails to respond to a packet.\n"
+            "             Note: Default behavior executes down_cmd only once, resetting once the host is back up.\n"
+            "  -h         Help (prints this message)\n"
+            "  -f <file>  Specify a configuration file.\n"
+            , VERSION, argv[0]);
 }
 
 void
 parse_params(int argc, char ** argv)
 {
     int param;
-    while ((param = getopt(argc, argv, "rvf:")) != -1) {
+    while ((param = getopt(argc, argv, "hrvf:")) != -1) {
         switch(param) {
             case 'v':
                 verbose = true;
@@ -426,9 +429,11 @@ parse_params(int argc, char ** argv)
             case 'f':
                 parse_config(optarg);
                 break;
+            case 'h':
             default:
-                print_usage();
+                print_usage(argv);
                 exit(EXIT_FAILURE);
+                break;
         }
     }
     if (hosts == NULL) {
