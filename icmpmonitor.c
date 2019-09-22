@@ -54,19 +54,18 @@ struct monitor_host {
     bool               host_up;
     struct sockaddr_in dest;
 
-    /* TODO: Why are we using both a linked list AND an array for this data? */
     /* Linked list */
     struct monitor_host * next;
 };
 
 /* Globals */
     /* Since the program is based around signals, a linked list of hosts is maintained here. */
-    static struct monitor_host ** hosts          = NULL;
+    static struct monitor_host * hosts          = NULL;
     /* Set by command line flags. */
-    static bool                   verbose        = false;
-    static bool                   retry_down_cmd = false;
+    static bool                  verbose        = false;
+    static bool                  retry_down_cmd = false;
     /* TODO: Get rid of this global. */
-    static int                    send_delay     = 1;
+    static int                   send_delay     = 1;
 
 /*
  * Checksum routine for Internet Protocol family headers
@@ -129,10 +128,9 @@ pinger(int ignore)
 {
     int i;
     struct icmp * icp;
-    struct monitor_host * p;
+    struct monitor_host * p = hosts;
     u_char outpack[MAXPACKETSIZE];
 
-    p = hosts[0];
     while (p) {
         if (p->socket != -1) {
             struct timeval now;
@@ -249,7 +247,7 @@ get_response(void)
     struct monitor_host * p;
 
     while (1) {
-        p = hosts[0];
+        p = hosts;
         FD_ZERO(&rfds);
         while (p) {
             if (p->socket != -1) {
@@ -264,7 +262,7 @@ get_response(void)
             /* Intentionally empty. We arrive here when interrupted by a signal. No action should be taken. */
         } else {
             if (retval > 0) {
-                p = hosts[0];
+                p = hosts;
                 while (p) {
                     if (p->socket!=-1 && FD_ISSET(p->socket, &rfds)) read_icmp_data(p);
                     p = p->next;
@@ -291,7 +289,7 @@ parse_config(const char * conf_file)
         exit(EXIT_FAILURE);
     }
 
-    hosts = malloc(sizeof(struct monitor_host *) * host_count);
+    struct monitor_host * host_list_end = NULL;
     for (int i=0; i < host_count; i++) {
         /* Allocate a reusable buffer large enough to hold the full 'section:key' string. */
         int section_len = strlen(iniparser_getsecname(conf, i));
@@ -299,43 +297,52 @@ parse_config(const char * conf_file)
         strcpy(key_buf, iniparser_getsecname(conf, i));
         key_buf[section_len++] = ':';
 
-        hosts[i] = malloc(sizeof(struct monitor_host));
+        struct monitor_host * cur_host = malloc(sizeof(struct monitor_host));
 
         key_buf[section_len] = '\0';
         strncat(key_buf, "host", MAXCONFKEYLEN);
-        hosts[i]->name = strdup(iniparser_getstring(conf, key_buf, NULL));
+        cur_host->name = strdup(iniparser_getstring(conf, key_buf, NULL));
 
         key_buf[section_len] = '\0';
         strncat(key_buf, "interval", MAXCONFKEYLEN);
-        hosts[i]->ping_interval = iniparser_getint(conf, key_buf, -1);
+        cur_host->ping_interval = iniparser_getint(conf, key_buf, -1);
 
         key_buf[section_len] = '\0';
         strncat(key_buf, "max_delay", MAXCONFKEYLEN);
-        hosts[i]->max_delay = iniparser_getint(conf, key_buf, -1);
+        cur_host->max_delay = iniparser_getint(conf, key_buf, -1);
 
         key_buf[section_len] = '\0';
         strncat(key_buf, "up_cmd", MAXCONFKEYLEN);
-        hosts[i]->up_cmd = strdup(iniparser_getstring(conf, key_buf, NULL));
+        cur_host->up_cmd = strdup(iniparser_getstring(conf, key_buf, NULL));
 
         key_buf[section_len] = '\0';
         strncat(key_buf, "down_cmd", MAXCONFKEYLEN);
-        hosts[i]->down_cmd = strdup(iniparser_getstring(conf, key_buf, NULL));
+        cur_host->down_cmd = strdup(iniparser_getstring(conf, key_buf, NULL));
 
         key_buf[section_len] = '\0';
         /* TODO: Parse for up/down/auto in start_condition. */
         /* TODO: Do a host up/down check if necessary. */
-        hosts[i]->host_up = true;
+        cur_host->host_up = true;
 
         /* TODO: Do I want to make any checks for start_condition? */
-        if (hosts[i]->name == NULL || hosts[i]->ping_interval == -1 || hosts[i]->max_delay == -1) {
+        if (cur_host->name == NULL || cur_host->ping_interval == -1 || cur_host->max_delay == -1) {
             fprintf(stderr, "ERROR: Problems parsing section %s.\n", iniparser_getsecname(conf, i));
             exit(EXIT_FAILURE);
         }
 
-        hosts[i]->socket = -1;
-        hosts[i]->next = NULL;
-        if (i>0) hosts[i-1]->next = hosts[i];
-        gettimeofday(&(hosts[i]->last_ping_received), (struct timezone *) NULL);
+        cur_host->socket = -1;
+        cur_host->next = NULL;
+        gettimeofday(&(cur_host->last_ping_received), (struct timezone *) NULL);
+
+        if (hosts == NULL) {
+            hosts = cur_host;
+            host_list_end = cur_host;
+        } else {
+            host_list_end->next = cur_host;
+            host_list_end = cur_host;
+        }
+
+        free(key_buf);
     }
     iniparser_freedict(conf);
 }
@@ -365,7 +372,7 @@ gcd(int x, int y)
 static void
 init_hosts(void)
 {
-    struct monitor_host * p = hosts[0];
+    struct monitor_host * p = hosts;
     struct protoent * proto;
     int ok = 0;
 
