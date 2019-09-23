@@ -35,6 +35,11 @@
 #define MAXPACKETSIZE  (65536 - 60 - 8) /* TODO: What are the magic numbers? */
 #define DEFAULTDATALEN (64 - 8)         /* TODO: What are the magic numbers? */
 
+/* ICMP header contains: type, code, checksum, identifier and sequence number. */
+#define ICMP_ECHO_HEADER_BYTES  8
+#define ICMP_ECHO_DATA_BYTES    sizeof(struct timeval)
+#define ICMP_ECHO_PACKET_BYTES  ICMP_ECHO_HEADER_BYTES + ICMP_ECHO_DATA_BYTES
+
 /* Must be larger than the length of the longest configuration key (currently 'start_condition'). */
 #define MAXCONFKEYLEN 20
 
@@ -67,37 +72,21 @@ struct monitor_host {
     static bool                  retry_down_cmd = false;
 
 /*
- * Checksum routine for Internet Protocol family headers
+ * Generate an Internet Checksum per RFC 1071.
+ *
+ * This is not a general purpose implementation of RFC 1071.  Since we only
+ * send ICMP echo packets, we assume 'data' will contain a specific number of
+ * bytes.
  */
-static int
-in_cksum(unsigned short * addr, int len)
+uint16_t
+checksum(uint16_t * data)
 {
-    int nleft = len;
-    unsigned short * w = addr;
-    int sum = 0;
-    unsigned short answer = 0;
-
-    /*
-     * Our algorithm is simple, using a 32 bit accumulator (sum), we add
-     * sequential 16 bit words to it, and at the end, fold back all the
-     * carry bits from the top 16 bits into the lower 16 bits.
-     */
-    while (nleft > 1) {
-        sum += *w++;
-        nleft -= 2;
+    uint32_t accumulator = 0;
+    for (size_t i = 0; i < ICMP_ECHO_PACKET_BYTES / 2; i++) {
+        accumulator += ntohs(data[i]);
+        if (accumulator > 0xffff) accumulator -= 0xffff;
     }
-
-    /* mop up an odd byte, if necessary */
-    if (nleft == 1) {
-        *(u_char *)(&answer) = *(u_char *)w;
-        sum += answer;
-    }
-
-    /* add back carry outs from top 16 bits to low 16 bits */
-    sum = (sum >> 16) + (sum & 0xffff); /* add hi 16 to low 16 */
-    sum += (sum >> 16);                 /* add carry */
-    answer = ~sum;                      /* truncate to 16 bits */
-    return(answer);
+    return htons(~accumulator);
 }
 
 /*
@@ -128,7 +117,7 @@ pinger(int ignore)
     int i;
     struct icmp * icp;
     struct monitor_host * p = hosts;
-    u_char outpack[MAXPACKETSIZE];
+    unsigned char outpack[MAXPACKETSIZE]; /* Use char so this can be aliased later. */
 
     while (p) {
         if (p->socket != -1) {
@@ -167,8 +156,7 @@ pinger(int ignore)
 
                 int cc = DEFAULTDATALEN + 8;  /* skips ICMP portion */
 
-                /* compute ICMP checksum */
-                icp->icmp_cksum = in_cksum((unsigned short *) icp, cc);
+                icp->icmp_cksum = checksum((uint16_t *) outpack);
 
                 i = sendto(p->socket, (char *) outpack, cc, 0, (const struct sockaddr *) (&p->dest), sizeof(struct sockaddr));
 
