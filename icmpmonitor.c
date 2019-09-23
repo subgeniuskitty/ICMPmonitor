@@ -27,6 +27,7 @@
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
 #include <errno.h>
+#include <assert.h>
 
 #include "iniparser/iniparser.h"
 
@@ -90,18 +91,13 @@ checksum(uint16_t * data)
 }
 
 /*
- * Subtracts two timeval structs.
- * Ensure out >= in.
- * Modifies out = out - in.
+ * Calculate difference between two timeval structs to within one second.
  */
-static void
-tv_sub(register struct timeval * out, register struct timeval * in)
+void
+timeval_diff(struct timeval * a, const struct timeval * b)
 {
-    if ((out->tv_usec -= in->tv_usec) < 0) {
-        --out->tv_sec;
-        out->tv_usec += 1000000;
-    }
-    out->tv_sec -= in->tv_sec;
+    assert(a->tv_sec >= b->tv_sec);
+    a->tv_sec -= b->tv_sec;
 }
 
 /*
@@ -124,7 +120,7 @@ pinger(int ignore)
             struct timeval now;
 
             gettimeofday(&now, (struct timezone *) NULL);
-            tv_sub(&now, &p->last_ping_received);
+            timeval_diff(&now, &p->last_ping_received);
 
             if (now.tv_sec > (p->max_delay + p->ping_interval)) {
                 if ((p->host_up) || retry_down_cmd) {
@@ -140,7 +136,7 @@ pinger(int ignore)
             }
 
             gettimeofday(&now, (struct timezone *) NULL);
-            tv_sub(&now, &p->last_ping_sent);
+            timeval_diff(&now, &p->last_ping_sent);
 
             if (now.tv_sec > p->ping_interval) { /* Time to send ping */
                 icp = (struct icmp *) outpack;
@@ -207,10 +203,10 @@ read_icmp_data(struct monitor_host * p)
 
         memcpy(&p->last_ping_received, &tv, sizeof(tv));
 
-        tv_sub(&tv, (struct timeval *) &icmp->icmp_data[0]);
+        timeval_diff(&tv, (struct timeval *) &icmp->icmp_data[0]);
         delay = tv.tv_sec * 1000 + (tv.tv_usec / 1000);
 
-        if (verbose) printf("INFO: Got ICMP reply from %s in %d ms.\n", p->name, delay);
+        if (verbose) printf("INFO: Got ICMP reply from %s.\n", p->name);
         if (!p->host_up) {
             if (verbose) printf("INFO: Host %s started responding. Executing UP command.\n", p->name);
             p->host_up = true;
