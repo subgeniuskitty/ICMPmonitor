@@ -49,7 +49,7 @@
 #define MAXCONFKEYLEN 20
 
 /* One struct per host as listed in the config file. */
-struct monitor_host {
+struct host_entry {
     /* From the config file */
     char * name;
     int    ping_interval;
@@ -65,12 +65,12 @@ struct monitor_host {
     struct sockaddr_in dest;
 
     /* Linked list */
-    struct monitor_host * next;
+    struct host_entry * next;
 };
 
 /* Globals */
     /* Since the program is based around signals, a linked list of hosts is maintained here. */
-    static struct monitor_host * hosts          = NULL;
+    static struct host_entry * first_host_in_list = NULL;
     /* Set by command line flags. */
     static bool                  verbose        = false;
     static bool                  retry_down_cmd = false;
@@ -83,7 +83,7 @@ struct monitor_host {
  * bytes.
  */
 uint16_t
-checksum(uint16_t * data)
+checksum(const uint16_t * data)
 {
     uint32_t accumulator = 0;
     for (size_t i = 0; i < ICMP_ECHO_PACKET_BYTES / 2; i++) {
@@ -115,7 +115,7 @@ pinger(int ignore)
 {
     int i;
     struct icmp * icp;
-    struct monitor_host * p = hosts;
+    struct host_entry * p = first_host_in_list;
     unsigned char outpack[MAXPACKETSIZE]; /* Use char so this can be aliased later. */
 
     while (p) {
@@ -174,7 +174,7 @@ pinger(int ignore)
 }
 
 static void
-read_icmp_data(struct monitor_host * p)
+read_icmp_data(struct host_entry * p)
 {
     int cc, iphdrlen, delay;
     socklen_t fromlen;
@@ -230,10 +230,10 @@ get_response(void)
 {
     fd_set rfds;
     int retval, maxd = -1;
-    struct monitor_host * p;
+    struct host_entry * p;
 
     while (1) {
-        p = hosts;
+        p = first_host_in_list;
         FD_ZERO(&rfds);
         while (p) {
             if (p->socket != -1) {
@@ -248,7 +248,7 @@ get_response(void)
             /* Intentionally empty. We arrive here when interrupted by a signal. No action should be taken. */
         } else {
             if (retval > 0) {
-                p = hosts;
+                p = first_host_in_list;
                 while (p) {
                     if (p->socket!=-1 && FD_ISSET(p->socket, &rfds)) read_icmp_data(p);
                     p = p->next;
@@ -275,7 +275,7 @@ parse_config(const char * conf_file)
         exit(EXIT_FAILURE);
     }
 
-    struct monitor_host * host_list_end = NULL;
+    struct host_entry * host_list_end = NULL;
     for (int i=0; i < host_count; i++) {
         /* Allocate a reusable buffer large enough to hold the full 'section:key' string. */
         int section_len = strlen(iniparser_getsecname(conf, i));
@@ -283,7 +283,7 @@ parse_config(const char * conf_file)
         strcpy(key_buf, iniparser_getsecname(conf, i));
         key_buf[section_len++] = ':';
 
-        struct monitor_host * cur_host = malloc(sizeof(struct monitor_host));
+        struct host_entry * cur_host = malloc(sizeof(struct host_entry));
 
         key_buf[section_len] = '\0';
         strncat(key_buf, "host", MAXCONFKEYLEN);
@@ -320,8 +320,8 @@ parse_config(const char * conf_file)
         cur_host->next = NULL;
         gettimeofday(&(cur_host->last_ping_received), (struct timezone *) NULL);
 
-        if (hosts == NULL) {
-            hosts = cur_host;
+        if (first_host_in_list == NULL) {
+            first_host_in_list = cur_host;
             host_list_end = cur_host;
         } else {
             host_list_end->next = cur_host;
@@ -333,18 +333,24 @@ parse_config(const char * conf_file)
     iniparser_freedict(conf);
 }
 
-static int
+/*
+ * Parse string (IP or hostname) to Internet address.
+ *
+ * Returns 0 if host can't be resolved, otherwise returns an Internet address.
+ */
+uint32_t
 get_host_addr(const char * name)
 {
-    static int res;
-    struct hostent * host_ent;
+    struct addrinfo hints;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
 
-    if ((res = inet_addr(name)) < 0) {
-        host_ent = gethostbyname(name);
-        if (!host_ent) return -1;
-        memcpy(&res, host_ent->h_addr, host_ent->h_length);
-    }
-    return(res);
+    int rv;
+    struct addrinfo * address;
+    if ((rv = getaddrinfo(name, NULL, &hints, &address)) != 0) return 0;
+    uint32_t result = ((struct sockaddr_in *)(address->ai_addr))->sin_addr.s_addr;
+    freeaddrinfo(address);
+    return result;
 }
 
 size_t
@@ -355,40 +361,56 @@ gcd(const size_t x, const size_t y)
     return gcd(y, remainder);
 }
 
-static void
+void
+remove_host_from_list(struct host_entry * host)
+{
+    assert(first_host_in_list);
+    assert(host);
+
+    if (host == first_host_in_list) {
+        first_host_in_list = host->next;
+    } else {
+        struct host_entry * temp = first_host_in_list;
+        while (temp->next != host && temp->next != NULL) temp = temp->next;
+        if (temp->next == NULL) return;
+        temp->next = temp->next->next;
+    }
+    free(host);
+}
+
+void
 init_hosts(void)
 {
-    struct monitor_host * p = hosts;
+    struct host_entry * host;
     struct protoent * proto;
-    int ok = 0;
 
     if ((proto = getprotobyname("icmp")) == NULL) {
         fprintf(stderr, "ERROR: Unknown protocol: icmp.\n");
         exit(EXIT_FAILURE);
     }
 
-    while (p) {
-        bzero(&p->dest, sizeof(p->dest));
-        p->dest.sin_family = AF_INET;
-        if ((p->dest.sin_addr.s_addr = get_host_addr(p->name)) <= 0) {
-            fprintf(stderr, "WARN: Can't resolve host. Skipping client %s.\n", p->name);
-            p->socket=-1;
-        } else {
-            if ((p->socket = socket(AF_INET,SOCK_RAW,proto->p_proto)) < 0) {
-                fprintf(stderr, "WARN: Can't create socket. Skipping client %s.\n", p->name);
-                p->socket=-1;
-            } else {
-                //if (ok == 0) send_delay = p->ping_interval;
-                //else send_delay = gcd(send_delay, p->ping_interval);
-                ok++;
-            }
+    assert(first_host_in_list);
+    host = first_host_in_list;
+    while (host) {
+        struct host_entry * next_host = host->next;
+        bzero(&host->dest, sizeof(host->dest));
+        host->dest.sin_family = AF_INET;
+        if (!(host->dest.sin_addr.s_addr = get_host_addr(host->name))) {
+            fprintf(stderr, "WARN: Removing unresolvable host %s from list.\n", host->name);
+            remove_host_from_list(host);
         }
-        p = p->next;
+        host = next_host;
     }
 
-    if (!ok) {
-        fprintf(stderr, "ERROR: No hosts left to process.\n");
-        exit(EXIT_FAILURE);
+    assert(first_host_in_list);
+    host = first_host_in_list;
+    while (host) {
+        struct host_entry * next_host = host->next;
+        if ((host->socket = socket(AF_INET, SOCK_RAW, proto->p_proto)) < 0) {
+            fprintf(stderr, "WARN: Failed creating socket. Removing host %s from list.\n", host->name);
+            remove_host_from_list(host);
+        }
+        host = next_host;
     }
 }
 
@@ -427,7 +449,7 @@ parse_params(int argc, char ** argv)
                 break;
         }
     }
-    if (hosts == NULL) {
+    if (first_host_in_list == NULL) {
         fprintf(stderr, "ERROR: Unable to parse a config file.\n");
         exit(EXIT_FAILURE);
     }
