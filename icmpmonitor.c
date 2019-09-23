@@ -347,10 +347,10 @@ get_host_addr(const char * name)
     return(res);
 }
 
-static int
-gcd(int x, int y)
+size_t
+gcd(const size_t x, const size_t y)
 {
-    int remainder = x % y;
+    size_t remainder = x % y;
     if (remainder == 0) return y;
     return gcd(y, remainder);
 }
