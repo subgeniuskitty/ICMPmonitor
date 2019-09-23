@@ -41,6 +41,10 @@
 #define ICMP_ECHO_DATA_BYTES    sizeof(struct timeval)
 #define ICMP_ECHO_PACKET_BYTES  ICMP_ECHO_HEADER_BYTES + ICMP_ECHO_DATA_BYTES
 
+/* Minimum time in seconds between pings. If this value is increased above the */
+/* `ping_interval` for a given host, some pings to that host may not be sent.  */
+#define TIMER_RESOLUTION        1
+
 /* Must be larger than the length of the longest configuration key (currently 'start_condition'). */
 #define MAXCONFKEYLEN 20
 
@@ -67,7 +71,6 @@ struct monitor_host {
 /* Globals */
     /* Since the program is based around signals, a linked list of hosts is maintained here. */
     static struct monitor_host * hosts          = NULL;
-    static int                   send_delay     = 1;
     /* Set by command line flags. */
     static bool                  verbose        = false;
     static bool                  retry_down_cmd = false;
@@ -167,7 +170,7 @@ pinger(int ignore)
     }
 
     signal(SIGALRM, pinger); /* restore handler */
-    alarm(send_delay);
+    alarm(TIMER_RESOLUTION);
 }
 
 static void
@@ -375,8 +378,8 @@ init_hosts(void)
                 fprintf(stderr, "WARN: Can't create socket. Skipping client %s.\n", p->name);
                 p->socket=-1;
             } else {
-                if (ok == 0) send_delay = p->ping_interval;
-                else send_delay = gcd(send_delay, p->ping_interval);
+                //if (ok == 0) send_delay = p->ping_interval;
+                //else send_delay = gcd(send_delay, p->ping_interval);
                 ok++;
             }
         }
@@ -438,7 +441,7 @@ main(int argc, char ** argv)
     init_hosts();
 
     signal(SIGALRM, pinger);
-    alarm(send_delay);
+    alarm(TIMER_RESOLUTION);
 
     get_response();
 
