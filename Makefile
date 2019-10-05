@@ -1,16 +1,16 @@
-# © 2018 Aaron Taylor <ataylor at subgeniuskitty dot com>
+# © 2019 Aaron Taylor <ataylor at subgeniuskitty dot com>
 # See LICENSE file for copyright and license details.
 
 ####################################################################################################
 # Executables
 
-CC              = cc
+CC          = cc
 
 ####################################################################################################
 # Configuration
 
-CC_FLAGS        = -fPIC -Wall -pedantic -O2
-SRC_FILES	= icmpmonitor.c iniparser/dictionary.c iniparser/iniparser.c
+CC_FLAGS    = -Wall -pedantic -O2
+SRC_FILES   = icmpmonitor.c iniparser/dictionary.c iniparser/iniparser.c
 
 ####################################################################################################
 # Targets
@@ -22,3 +22,6 @@ icmpmonitor:
 
 clean:
 	@rm -f icmpmonitor icmpmonitor.core
+
+install: all
+	@echo "Manually copy the 'icmpmonitor' binary where you please."
