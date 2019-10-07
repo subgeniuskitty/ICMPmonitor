@@ -39,20 +39,19 @@
 
 #define VERSION 2
 
-#define MAXPACKETSIZE  (65536 - 60 - 8) /* TODO: What are the magic numbers? */
-#define DEFAULTDATALEN (64 - 8)         /* TODO: What are the magic numbers? */
-
 /* ICMP header contains: type, code, checksum, identifier and sequence number. */
 #define ICMP_ECHO_HEADER_BYTES  8
 #define ICMP_ECHO_DATA_BYTES    sizeof(struct timeval)
 #define ICMP_ECHO_PACKET_BYTES  ICMP_ECHO_HEADER_BYTES + ICMP_ECHO_DATA_BYTES
+#define IP_PACKET_MAX_BYTES     65535
 
 /* Minimum time in seconds between pings. If this value is increased above the */
 /* `ping_interval` for a given host, some pings to that host may not be sent.  */
 #define TIMER_RESOLUTION        1
 
-/* Must be larger than the length of the longest configuration key (currently 'start_condition'). */
-#define MAXCONFKEYLEN 20
+/* Must be larger than the length of the longest configuration key (not value). */
+/* For example: MAX_CONF_KEY_LEN > strlen("start_condition")                    */
+#define MAX_CONF_KEY_LEN 	20
 
 /* One struct per host as listed in the config file. */
 struct host_entry {
@@ -76,10 +75,10 @@ struct host_entry {
 
 /* Globals */
     /* Since the program is based around signals, a linked list of hosts is maintained here. */
-    static struct host_entry * first_host_in_list = NULL;
+    struct host_entry * first_host_in_list = NULL;
     /* Set by command line flags. */
-    static bool                  verbose        = false;
-    static bool                  retry_down_cmd = false;
+    bool                verbose            = false;
+    bool                retry_down_cmd     = false;
 
 /*
  * Generate an Internet Checksum per RFC 1071.
