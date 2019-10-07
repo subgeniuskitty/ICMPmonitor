@@ -211,37 +211,38 @@ read_icmp_data(struct host_entry * host)
     }
 }
 
-static void
+/*
+ * This function contains the main program loop, listening for replies to pings
+ * sent from the signal-driven pinger().
+ */
+void
 get_response(void)
 {
-    fd_set rfds;
-    int retval, maxd = -1;
-    struct host_entry * p;
-
-    while (1) {
-        p = first_host_in_list;
+    while (true) {
+        fd_set rfds;
         FD_ZERO(&rfds);
-        while (p) {
-            if (p->socket != -1) {
-                if (p->socket > maxd) maxd = p->socket;
-                FD_SET(p->socket, &rfds);
-            }
-            p = p->next;
+
+        assert(first_host_in_list);
+        struct host_entry * host = first_host_in_list;
+
+        int max_fd = -1;
+        while (host) {
+            if (host->socket > max_fd) max_fd = host->socket;
+            FD_SET(host->socket, &rfds);
+            host = host->next;
         }
 
-        retval = select(maxd+1, &rfds, NULL, NULL, NULL);
-        if (retval < 0) {
-            /* Intentionally empty. We arrive here when interrupted by a signal. No action should be taken. */
-        } else {
-            if (retval > 0) {
-                p = first_host_in_list;
-                while (p) {
-                    if (p->socket!=-1 && FD_ISSET(p->socket, &rfds)) read_icmp_data(p);
-                    p = p->next;
-                }
-            } else {
-                /* TODO: How to handle this error? */
+        int retval;
+        if ((retval = select(max_fd+1, &rfds, NULL, NULL, NULL)) > 0) {
+            assert(first_host_in_list);
+            host = first_host_in_list;
+            while (host) {
+                if (FD_ISSET(host->socket, &rfds)) read_icmp_data(host);
+                host = host->next;
             }
+        } else {
+            /* An error or interruption occurred.                    */
+            /* We can't do anything about it, so loop and try again. */
         }
     }
 }
