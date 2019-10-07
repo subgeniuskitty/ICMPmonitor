@@ -432,6 +432,7 @@ parse_params(int argc, char ** argv)
     }
     if (first_host_in_list == NULL) {
         fprintf(stderr, "ERROR: Unable to parse a config file.\n");
+        print_usage(argv);
         exit(EXIT_FAILURE);
     }
 }
@@ -439,14 +440,22 @@ parse_params(int argc, char ** argv)
 int
 main(int argc, char ** argv)
 {
+    /* Parse the command line options, load and parse the config file. */
     parse_params(argc, argv);
 
+    /* Process config for each host, generating/verifying any necessary information. */
     init_hosts();
 
+    /* Make sure initialization left us with something useful. */
+    assert(first_host_in_list);
+
+    /* Pings are sent asynchronously. */
     signal(SIGALRM, pinger);
     alarm(TIMER_RESOLUTION);
 
+    /* The main program loop listens for ping responses. */
     get_response();
 
+    /* Should be unreachable. */
     exit(EXIT_SUCCESS);
 }
