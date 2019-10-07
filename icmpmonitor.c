@@ -171,55 +171,43 @@ pinger(int ignore) /* Dummy parameter since this function registers as a signal 
     alarm(TIMER_RESOLUTION);
 }
 
-static void
-read_icmp_data(struct host_entry * p)
+void
+read_icmp_data(struct host_entry * host)
 {
-    int cc, iphdrlen, delay;
-    socklen_t fromlen;
+    struct timeval now;
+    gettimeofday(&now, NULL);
+
     struct sockaddr_in from;
-    struct ip * ip;
-    struct icmp * icmp;
-    struct timeval tv;
-    unsigned char buf[MAXPACKETSIZE];
-
-    gettimeofday(&tv, (struct timezone *) NULL);
-
-    fromlen = sizeof(from);
-    if ((cc = recvfrom(p->socket, buf, sizeof(buf), 0, (struct sockaddr *)&from, &fromlen)) < 0) {
-        if (errno != EINTR) fprintf(stderr, "WARN: Error reading ICMP data from %s.\n", p->name);
+    socklen_t fromlen = sizeof(from);
+    int bytes;
+    unsigned char packet[IP_PACKET_MAX_BYTES]; /* Use char so this can be aliased later. */
+    if ((bytes = recvfrom(host->socket, packet, sizeof(packet), 0, (struct sockaddr *) &from, &fromlen)) < 0) {
+        if (errno != EINTR) fprintf(stderr, "WARN: Error reading ICMP data from %s.\n", host->name);
         return;
     }
 
-    /* check IP header actual len */
-    ip       = (struct ip *) buf;
-    iphdrlen = ip->ip_hl << 2;
-    icmp     = (struct icmp *) (buf + iphdrlen);
+    struct ip * ip     = (struct ip *) packet;
+    int iphdrlen       = ip->ip_hl << 2;
+    struct icmp * icmp = (struct icmp *) (packet + iphdrlen);
 
-    if (cc < iphdrlen + ICMP_MINLEN) {
-        fprintf(stderr, "WARN: Received short packet from %s.\n", p->name);
+    if (bytes < iphdrlen + ICMP_MINLEN) {
+        fprintf(stderr, "WARN: Received short packet from %s.\n", host->name);
         return;
     }
 
-    if (icmp->icmp_type == ICMP_ECHOREPLY && icmp->icmp_id == (getpid() & 0xFFFF) && icmp->icmp_seq == p->socket) {
-
-        memcpy(&p->last_ping_received, &tv, sizeof(tv));
-
-        timeval_diff(&tv, (struct timeval *) &icmp->icmp_data[0]);
-        delay = tv.tv_sec * 1000 + (tv.tv_usec / 1000);
-
-        if (verbose) printf("INFO: Got ICMP reply from %s.\n", p->name);
-        if (!p->host_up) {
-            if (verbose) printf("INFO: Host %s started responding. Executing UP command.\n", p->name);
-            p->host_up = true;
+    if (icmp->icmp_type == ICMP_ECHOREPLY && icmp->icmp_id == (getpid() & 0xFFFF) && icmp->icmp_seq == host->socket) {
+        memcpy(&host->last_ping_received, &now, sizeof(now));
+        if (verbose) printf("INFO: Got ICMP reply from %s.\n", host->name);
+        if (!host->host_up) {
+            if (verbose) printf("INFO: Host %s started responding. Executing UP command.\n", host->name);
+            host->host_up = true;
             if (!fork()) {
-                system(p->up_cmd);
+                system(host->up_cmd);
                 exit(EXIT_SUCCESS);
-            } else {
-                wait(NULL);
             }
         }
     } else {
-        /* TODO: Do anything here? */
+        /* The packet isn't what we expected. Ignore it and move on. */
     }
 }
 
