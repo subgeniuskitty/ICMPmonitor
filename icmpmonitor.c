@@ -133,8 +133,8 @@ pinger(int ignore) /* Dummy parameter since this function registers as a signal 
             if (verbose) printf("INFO: Host %s stopped responding. Executing DOWN command.\n", host->name);
             host->host_up = false;
             if (!fork()) {
-                system(host->down_cmd);
-                exit(EXIT_SUCCESS);
+                int sys_ret = system(host->down_cmd);
+                exit(sys_ret);
             }
         }
 
@@ -201,8 +201,8 @@ read_icmp_data(struct host_entry * host)
             if (verbose) printf("INFO: Host %s started responding. Executing UP command.\n", host->name);
             host->host_up = true;
             if (!fork()) {
-                system(host->up_cmd);
-                exit(EXIT_SUCCESS);
+                int sys_ret = system(host->up_cmd);
+                exit(sys_ret);
             }
         }
     } else {
