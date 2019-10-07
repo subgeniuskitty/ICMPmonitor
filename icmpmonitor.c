@@ -100,12 +100,16 @@ checksum(const uint16_t * data)
 }
 
 /*
- * Calculate difference between two timeval structs to within one second.
+ * Calculate difference (a-b) between two timeval structs.
  */
 void
 timeval_diff(struct timeval * a, const struct timeval * b)
 {
-    assert(a->tv_sec >= b->tv_sec);
+    if (a->tv_usec < b->tv_usec) {
+        a->tv_sec--;
+        a->tv_usec += 1000000;
+    }
+    a->tv_usec -= b->tv_usec;
     a->tv_sec -= b->tv_sec;
 }
 
