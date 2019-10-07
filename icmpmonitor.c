@@ -247,7 +247,11 @@ get_response(void)
     }
 }
 
-static void
+/*
+ * Parse a configuration file using the `iniparser` library.
+ * See `icmpmonitor.ini` and `README.md` for examples and reference.
+ */
+void
 parse_config(const char * conf_file)
 {
     dictionary * conf = iniparser_load(conf_file);
@@ -266,38 +270,37 @@ parse_config(const char * conf_file)
     for (int i=0; i < host_count; i++) {
         /* Allocate a reusable buffer large enough to hold the full 'section:key' string. */
         int section_len = strlen(iniparser_getsecname(conf, i));
-        char * key_buf = malloc(section_len + 1 + MAXCONFKEYLEN + 1);
+        char * key_buf = malloc(section_len + 1 + MAX_CONF_KEY_LEN + 1); /* +1 for ':' and '\0' */
         strcpy(key_buf, iniparser_getsecname(conf, i));
         key_buf[section_len++] = ':';
 
         struct host_entry * cur_host = malloc(sizeof(struct host_entry));
 
         key_buf[section_len] = '\0';
-        strncat(key_buf, "host", MAXCONFKEYLEN);
+        strncat(key_buf, "host", MAX_CONF_KEY_LEN);
         cur_host->name = strdup(iniparser_getstring(conf, key_buf, NULL));
 
         key_buf[section_len] = '\0';
-        strncat(key_buf, "interval", MAXCONFKEYLEN);
+        strncat(key_buf, "interval", MAX_CONF_KEY_LEN);
         cur_host->ping_interval = iniparser_getint(conf, key_buf, -1);
 
         key_buf[section_len] = '\0';
-        strncat(key_buf, "max_delay", MAXCONFKEYLEN);
+        strncat(key_buf, "max_delay", MAX_CONF_KEY_LEN);
         cur_host->max_delay = iniparser_getint(conf, key_buf, -1);
 
         key_buf[section_len] = '\0';
-        strncat(key_buf, "up_cmd", MAXCONFKEYLEN);
+        strncat(key_buf, "up_cmd", MAX_CONF_KEY_LEN);
         cur_host->up_cmd = strdup(iniparser_getstring(conf, key_buf, NULL));
 
         key_buf[section_len] = '\0';
-        strncat(key_buf, "down_cmd", MAXCONFKEYLEN);
+        strncat(key_buf, "down_cmd", MAX_CONF_KEY_LEN);
         cur_host->down_cmd = strdup(iniparser_getstring(conf, key_buf, NULL));
 
         key_buf[section_len] = '\0';
-        /* TODO: Parse for up/down/auto in start_condition. */
-        /* TODO: Do a host up/down check if necessary. */
-        cur_host->host_up = true;
+        strncat(key_buf, "start_condition", MAX_CONF_KEY_LEN);
+        const char * value = iniparser_getstring(conf, key_buf, NULL);
+        if (value) cur_host->host_up = *value == 'u' ? true : false;
 
-        /* TODO: Do I want to make any checks for start_condition? */
         if (cur_host->name == NULL || cur_host->ping_interval == -1 || cur_host->max_delay == -1) {
             fprintf(stderr, "ERROR: Problems parsing section %s.\n", iniparser_getsecname(conf, i));
             exit(EXIT_FAILURE);
