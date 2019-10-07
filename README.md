@@ -12,7 +12,7 @@ configuration with the following commands.
 
 # Status #
 
-Complete. Tested on FreeBSD and Debian Linux.
+Complete. Tested on OpenBSD, FreeBSD and Debian Linux.
 
 
 # Instructions #
