@@ -114,72 +114,60 @@ timeval_diff(struct timeval * a, const struct timeval * b)
 }
 
 /*
- * Compose and transmit an ICMP ECHO REQUEST packet. The IP packet
- * will be added on by the kernel. The ID field is our UNIX process ID,
- * and the sequence number is an ascending integer. The first 8 bytes
- * of the data portion are used to hold a UNIX "timeval" struct in VAX
- * byte-order, to compute the round-trip time.
+ * This function iterates over the list of hosts, pinging any which are due.
  */
-static void
-pinger(int ignore)
+void
+pinger(int ignore) /* Dummy parameter since this function registers as a signal handler. */
 {
-    int i;
-    struct icmp * icp;
-    struct host_entry * p = first_host_in_list;
-    unsigned char outpack[MAXPACKETSIZE]; /* Use char so this can be aliased later. */
+    assert(first_host_in_list);
 
-    while (p) {
-        if (p->socket != -1) {
-            struct timeval now;
+    struct icmp * icmp_packet;
+    struct host_entry * host = first_host_in_list;
+    unsigned char packet[IP_PACKET_MAX_BYTES]; /* Use char so this can be aliased later. */
 
-            gettimeofday(&now, (struct timezone *) NULL);
-            timeval_diff(&now, &p->last_ping_received);
+    while (host) {
+        struct timeval elapsed_time;
+        gettimeofday(&elapsed_time, NULL);
+        timeval_diff(&elapsed_time, &host->last_ping_received);
 
-            if (now.tv_sec > (p->max_delay + p->ping_interval)) {
-                if ((p->host_up) || retry_down_cmd) {
-                    if (verbose) printf("INFO: Host %s stopped responding. Executing DOWN command.\n", p->name);
-                    p->host_up = false;
-                    if (!fork()) {
-                        system(p->down_cmd);
-                        exit(EXIT_SUCCESS);
-                    } else {
-                        wait(NULL);
-                    }
-                }
-            }
-
-            gettimeofday(&now, (struct timezone *) NULL);
-            timeval_diff(&now, &p->last_ping_sent);
-
-            if (now.tv_sec > p->ping_interval) { /* Time to send ping */
-                icp = (struct icmp *) outpack;
-                icp->icmp_type  = ICMP_ECHO;
-                icp->icmp_code  = 0;
-                icp->icmp_cksum = 0;
-                icp->icmp_seq   = p->socket;
-                icp->icmp_id    = getpid() & 0xFFFF;
-
-                if (verbose) printf("INFO: Sending ICMP packet to %s.\n", p->name);
-
-                gettimeofday((struct timeval *) &outpack[8], (struct timezone *) NULL);
-
-                int cc = DEFAULTDATALEN + 8;  /* skips ICMP portion */
-
-                icp->icmp_cksum = checksum((uint16_t *) outpack);
-
-                i = sendto(p->socket, (char *) outpack, cc, 0, (const struct sockaddr *) (&p->dest), sizeof(struct sockaddr));
-
-                gettimeofday(&p->last_ping_sent, (struct timezone *) NULL);
-
-                if (i < 0 || i != cc) {
-                    if (i<0) fprintf(stderr, "WARN: Failed sending ICMP packet to %s.\n", p->name);
-                }
+        if ((elapsed_time.tv_sec > host->max_delay) && (host->host_up || retry_down_cmd)) {
+            if (verbose) printf("INFO: Host %s stopped responding. Executing DOWN command.\n", host->name);
+            host->host_up = false;
+            if (!fork()) {
+                system(host->down_cmd);
+                exit(EXIT_SUCCESS);
             }
         }
-        p = p->next;
+
+        if (elapsed_time.tv_sec > host->ping_interval) {
+            if (verbose) printf("INFO: Sending ICMP packet to %s.\n", host->name);
+
+            icmp_packet = (struct icmp *) packet;
+            icmp_packet->icmp_type  = ICMP_ECHO;
+            icmp_packet->icmp_code  = 0;
+            icmp_packet->icmp_cksum = 0;
+            icmp_packet->icmp_seq   = host->socket;
+            icmp_packet->icmp_id    = getpid() & 0xFFFF;
+
+            /* Write a timestamp struct in the packet's data segment for use in calculating travel times. */
+            gettimeofday((struct timeval *) &packet[ICMP_ECHO_HEADER_BYTES], NULL);
+
+            icmp_packet->icmp_cksum = checksum((uint16_t *) packet);
+
+            size_t bytes_sent = sendto(host->socket, packet, ICMP_ECHO_PACKET_BYTES, 0,
+                                       (const struct sockaddr *) &host->dest,
+                                       sizeof(struct sockaddr));
+
+            if (bytes_sent == ICMP_ECHO_PACKET_BYTES) {
+                gettimeofday(&host->last_ping_sent, NULL);
+            } else {
+                fprintf(stderr, "WARN: Failed sending ICMP packet to %s.\n", host->name);
+            }
+        }
+        host = host->next;
     }
 
-    signal(SIGALRM, pinger); /* restore handler */
+    signal(SIGALRM, pinger);
     alarm(TIMER_RESOLUTION);
 }
 
