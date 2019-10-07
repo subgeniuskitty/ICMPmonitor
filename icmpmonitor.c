@@ -11,6 +11,12 @@
  * See LICENSE file for copyright and license details.
  */
 
+/* Wishlist */
+/* TODO: Add IPv6 support. */
+/* TODO: Turn the global '-r' functionality into per-host config file option. */
+/* TODO: Add 'auto' keyword to 'start_condition', testing host on startup. */
+/* TODO: Double-check the network code when interrupted while receiving a packet. */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
