@@ -342,14 +342,6 @@ get_host_addr(const char * name)
     return result;
 }
 
-size_t
-gcd(const size_t x, const size_t y)
-{
-    size_t remainder = x % y;
-    if (remainder == 0) return y;
-    return gcd(y, remainder);
-}
-
 void
 remove_host_from_list(struct host_entry * host)
 {
